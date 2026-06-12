@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { TrendingUp, X, CheckCircle2, XCircle, MinusCircle, Activity, Users, Sparkles } from "lucide-react";
+import {
+  TrendingUp, TrendingDown, Minus, X,
+  CheckCircle2, XCircle, MinusCircle,
+  Activity, Users, Sparkles, AlertCircle,
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -18,20 +22,39 @@ type Props = {
 type Aggregate = {
   principle: string;
   source: string;
-  totalOccurrences: number; // how many runs this finding appeared in
+  totalOccurrences: number;
   confirmed: number;
   refuted: number;
   inconclusive: number;
   recentNotes: { note: string; verdict: string; runLabel: string; createdAt: number; sampleSize?: number }[];
+  runIndices: number[]; // chronological position (0 = oldest run) of each occurrence
 };
 
+type Trend = "rising" | "declining" | "stable" | null;
+
+// Rising = biased toward newer runs (problem not improving).
+// Declining = biased toward older runs (may have been addressed).
+function computeTrend(runIndices: number[], totalRuns: number): Trend {
+  if (runIndices.length < 2 || totalRuns < 4) return null;
+  const avg = runIndices.reduce((s, i) => s + i, 0) / runIndices.length;
+  const mid = (totalRuns - 1) / 2;
+  if (avg > mid * 1.3) return "rising";
+  if (avg < mid * 0.7) return "declining";
+  return "stable";
+}
+
 export function PatternsView({ history, validations, onClose }: Props) {
+  const sortedHistory = useMemo(
+    () => [...history].sort((a, b) => a.createdAt - b.createdAt),
+    [history]
+  );
+
   const aggregates = useMemo<Aggregate[]>(() => {
     const byPrinciple = new Map<string, Aggregate>();
-    history.forEach((h) => {
+    sortedHistory.forEach((h, runIdx) => {
       h.result.findings.forEach((f) => {
         const evidence = validations.filter((v) => v.findingId === f.id);
-        const agg = byPrinciple.get(f.principle) || {
+        const agg = byPrinciple.get(f.principle) ?? {
           principle: f.principle,
           source: f.source,
           totalOccurrences: 0,
@@ -39,8 +62,10 @@ export function PatternsView({ history, validations, onClose }: Props) {
           refuted: 0,
           inconclusive: 0,
           recentNotes: [],
+          runIndices: [],
         };
         agg.totalOccurrences += 1;
+        agg.runIndices.push(runIdx);
         evidence.forEach((e) => {
           if (e.verdict === "confirmed") agg.confirmed += 1;
           else if (e.verdict === "refuted") agg.refuted += 1;
@@ -59,19 +84,21 @@ export function PatternsView({ history, validations, onClose }: Props) {
     return Array.from(byPrinciple.values())
       .map((a) => ({ ...a, recentNotes: a.recentNotes.sort((x, y) => y.createdAt - x.createdAt).slice(0, 3) }))
       .sort((a, b) => {
-        // sort: most confirmed pain points first, then by total evidence, then occurrence
         const aEv = a.confirmed + a.refuted + a.inconclusive;
         const bEv = b.confirmed + b.refuted + b.inconclusive;
         if (b.confirmed !== a.confirmed) return b.confirmed - a.confirmed;
         if (bEv !== aEv) return bEv - aEv;
         return b.totalOccurrences - a.totalOccurrences;
       });
-  }, [history, validations]);
+  }, [sortedHistory, validations]);
 
   const totalRuns = history.length;
   const totalEvidence = validations.length;
   const totalConfirmed = validations.filter((v) => v.verdict === "confirmed").length;
   const confirmedPatterns = aggregates.filter((a) => a.confirmed >= 2).length;
+  const needAttention = aggregates.filter(
+    (a) => a.totalOccurrences >= 2 && a.confirmed + a.refuted + a.inconclusive === 0
+  ).length;
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
@@ -91,11 +118,17 @@ export function PatternsView({ history, validations, onClose }: Props) {
       </CardHeader>
       <Separator />
 
-      <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         <Stat icon={Sparkles} label="Runs" value={totalRuns} />
         <Stat icon={Users} label="Evidence logs" value={totalEvidence} />
-        <Stat icon={CheckCircle2} label="Confirmed" value={totalConfirmed} color="text-emerald-600" />
-        <Stat icon={TrendingUp} label="Confirmed patterns" value={confirmedPatterns} color="text-primary" />
+        <Stat icon={CheckCircle2} label="Confirmed" value={totalConfirmed} color="text-emerald-600 dark:text-emerald-400" />
+        <Stat icon={TrendingUp} label="Patterns" value={confirmedPatterns} color="text-primary" />
+        <Stat
+          icon={AlertCircle}
+          label="Need attention"
+          value={needAttention}
+          color={needAttention > 0 ? "text-amber-600 dark:text-amber-400" : ""}
+        />
       </div>
 
       <Separator />
@@ -110,10 +143,16 @@ export function PatternsView({ history, validations, onClose }: Props) {
           {aggregates.map((a) => {
             const totalEv = a.confirmed + a.refuted + a.inconclusive;
             const isPattern = a.confirmed >= 2;
+            const isUnresolved = a.totalOccurrences >= 2 && totalEv === 0;
+            const trend = computeTrend(a.runIndices, totalRuns);
             return (
               <Card
                 key={a.principle}
-                className={isPattern ? "border-emerald-300 bg-emerald-50/50" : ""}
+                className={
+                  isPattern
+                    ? "border-emerald-300 bg-emerald-500/5 dark:border-emerald-800 dark:bg-emerald-500/10"
+                    : ""
+                }
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -125,22 +164,33 @@ export function PatternsView({ history, validations, onClose }: Props) {
                             <TrendingUp className="size-3" /> Pattern
                           </Badge>
                         )}
+                        {isUnresolved && (
+                          <Badge
+                            variant="outline"
+                            className="text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-400 text-xs gap-1"
+                          >
+                            <AlertCircle className="size-3" /> Needs attention
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="text-xs">
                           Seen in {a.totalOccurrences} run{a.totalOccurrences === 1 ? "" : "s"}
                         </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">{a.source}</div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="flex items-center gap-1 text-emerald-700">
-                        <CheckCircle2 className="size-3" /> {a.confirmed}
-                      </span>
-                      <span className="flex items-center gap-1 text-red-700">
-                        <XCircle className="size-3" /> {a.refuted}
-                      </span>
-                      <span className="flex items-center gap-1 text-amber-700">
-                        <MinusCircle className="size-3" /> {a.inconclusive}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      {trend && <TrendIndicator trend={trend} />}
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3" /> {a.confirmed}
+                        </span>
+                        <span className="flex items-center gap-1 text-red-700 dark:text-red-400">
+                          <XCircle className="size-3" /> {a.refuted}
+                        </span>
+                        <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                          <MinusCircle className="size-3" /> {a.inconclusive}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -175,10 +225,10 @@ export function PatternsView({ history, validations, onClose }: Props) {
                             variant="outline"
                             className={
                               n.verdict === "confirmed"
-                                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400"
                                 : n.verdict === "refuted"
-                                ? "text-red-700 bg-red-50 border-red-200"
-                                : "text-amber-700 bg-amber-50 border-amber-200"
+                                ? "text-red-700 bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
+                                : "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400"
                             }
                           >
                             {n.verdict}
@@ -209,7 +259,46 @@ export function PatternsView({ history, validations, onClose }: Props) {
   );
 }
 
-function Stat({ icon: Icon, label, value, color = "" }: { icon: any; label: string; value: number; color?: string }) {
+function TrendIndicator({ trend }: { trend: Trend }) {
+  if (trend === "rising")
+    return (
+      <span
+        className="flex items-center gap-0.5 text-xs text-red-600 dark:text-red-400"
+        title="Appearing more in recent runs — unresolved"
+      >
+        <TrendingUp className="size-3" /> Rising
+      </span>
+    );
+  if (trend === "declining")
+    return (
+      <span
+        className="flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"
+        title="Appearing less in recent runs — may be improving"
+      >
+        <TrendingDown className="size-3" /> Declining
+      </span>
+    );
+  return (
+    <span
+      className="flex items-center gap-0.5 text-xs text-muted-foreground"
+      title="Consistent frequency across runs"
+    >
+      <Minus className="size-3" /> Stable
+    </span>
+  );
+}
+
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  color = "",
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: number;
+  color?: string;
+}) {
   return (
     <div className="flex items-center gap-2">
       <div className="size-8 rounded-md bg-muted flex items-center justify-center">

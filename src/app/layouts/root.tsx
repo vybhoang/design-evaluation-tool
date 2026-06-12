@@ -1,7 +1,24 @@
 import { NavLink, Outlet } from "react-router";
+import { ThemeProvider, useTheme } from "next-themes";
+import { Moon, Sun } from "lucide-react";
 import { TooltipProvider } from "../components/ui/tooltip";
 import { Toaster } from "../components/ui/sonner";
+import { Button } from "../components/ui/button";
 import { StoreProvider } from "../store";
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      title="Toggle dark mode"
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+    >
+      {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
+  );
+}
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -11,6 +28,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export default function Root() {
   return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
     <StoreProvider>
       <TooltipProvider delayDuration={300}>
         <div className="size-full min-h-screen bg-background flex flex-col">
@@ -27,6 +45,7 @@ export default function Root() {
                 <NavLink to="/history" className={navClass}>Runs</NavLink>
                 <NavLink to="/patterns" className={navClass}>Patterns</NavLink>
                 <NavLink to="/compare" className={navClass}>Compare</NavLink>
+                <ThemeToggle />
               </nav>
             </div>
           </header>
@@ -53,5 +72,6 @@ export default function Root() {
         </div>
       </TooltipProvider>
     </StoreProvider>
+    </ThemeProvider>
   );
 }

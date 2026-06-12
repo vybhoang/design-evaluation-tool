@@ -1,5 +1,6 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, useEffect, type ReactNode } from "react";
 import { Upload, Sparkles, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -39,6 +40,22 @@ export function DesignCanvas({
     setContext({ ...context, imageUrl: url });
   };
 
+  useEffect(() => {
+    const handler = (e: ClipboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
+      if (!item) return;
+      if (context.imageUrl) {
+        toast("To replace the design, clear it first");
+        return;
+      }
+      const file = item.getAsFile();
+      if (file) handleFile(file);
+    };
+    document.addEventListener("paste", handler);
+    return () => document.removeEventListener("paste", handler);
+  }, [context]);
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
@@ -47,11 +64,7 @@ export function DesignCanvas({
   };
 
   const loadDemo = () => {
-    setContext({
-      ...context,
-      imageUrl:
-        "https://images.unsplash.com/photo-1559028012-481c04fa702d?w=1200&auto=format&fit=crop&q=70",
-    });
+    setContext({ ...context, imageUrl: "/sample-design.png" });
   };
 
   return (
@@ -77,7 +90,7 @@ export function DesignCanvas({
             <div className="text-center">
               <p className="font-serif text-lg tracking-tight">Drop a design</p>
               <p className="text-muted-foreground text-sm mt-1">
-                PNG, JPG, or Figma export · screens, mockups, wireframes
+                PNG, JPG · drop, click, or paste with Ctrl/Cmd+V
               </p>
             </div>
             <button

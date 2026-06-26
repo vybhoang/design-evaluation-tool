@@ -8,6 +8,13 @@ import { Badge } from "./ui/badge";
 import { toast } from "sonner";
 import type { AnalysisResult } from "./analysis-data";
 
+const VENDOR_URLS: Record<string, string> = {
+  UserTesting: "https://www.usertesting.com/",
+  Maze: "https://maze.co/",
+  Lyssna: "https://www.lyssna.com/",
+  "Fable (a11y)": "https://makeitfable.com/",
+};
+
 type Props = { result: AnalysisResult };
 
 export function HumanTestingPanel({ result }: Props) {
@@ -41,8 +48,10 @@ export function HumanTestingPanel({ result }: Props) {
     toast.success("Test script copied to clipboard");
   };
 
-  const handoff = (vendor: string) => {
-    toast(`Would open ${vendor} with the test script prefilled (demo).`);
+  const handoff = async (vendor: string) => {
+    await navigator.clipboard.writeText(scriptText);
+    window.open(VENDOR_URLS[vendor], "_blank", "noopener,noreferrer");
+    toast(`Opened ${vendor} — script copied, paste it into your new test.`);
   };
 
   const sendInvites = () => {
@@ -51,7 +60,12 @@ export function HumanTestingPanel({ result }: Props) {
       toast.error("Add at least one tester email.");
       return;
     }
-    toast.success(`Invite stub sent to ${list.length} tester${list.length === 1 ? "" : "s"}.`);
+    const subject = encodeURIComponent("Quick feedback session?");
+    const body = encodeURIComponent(
+      "Hi,\n\nI'd like to get your feedback on a design in a short usability session. I'll follow up with the details.\n\nThanks!"
+    );
+    window.location.href = `mailto:?bcc=${encodeURIComponent(list.join(","))}&subject=${subject}&body=${body}`;
+    toast.success(`Opening your email client with ${list.length} tester${list.length === 1 ? "" : "s"} bcc'd.`);
     setEmails("");
   };
 
@@ -93,7 +107,7 @@ export function HumanTestingPanel({ result }: Props) {
 
         <div>
           <div className="text-sm font-medium mb-2">Send to a research platform</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {["UserTesting", "Maze", "Lyssna", "Fable (a11y)"].map((v) => (
               <Button
                 key={v}
@@ -107,7 +121,7 @@ export function HumanTestingPanel({ result }: Props) {
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Stubs for now — connect your account to enable real handoff.
+            Cognition has no server — these open your own account on each platform. Nothing is sent automatically.
           </p>
         </div>
 

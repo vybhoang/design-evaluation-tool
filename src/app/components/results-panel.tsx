@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   AlertTriangle, CheckCircle2, Info, XCircle, BookOpen, Brain, Users,
-  Sparkles, ArrowRight, Download, Filter, Accessibility, Eye, ShieldAlert,
+  ArrowRight, Download, Filter, Accessibility, Eye, ShieldAlert,
   HelpCircle, Beaker, Flag, BookCheck, CircleDashed, MinusCircle,
+  FileText, Copy, Check, ChevronDown, X,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { InterviewRehearsal } from "./interview-rehearsal";
 import { ValidationDialog } from "./validation-dialog";
 import type { ValidationEvidence } from "./validation-store";
@@ -11,7 +13,6 @@ import { evidenceFor, validationStatus } from "./validation-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -20,6 +21,13 @@ import type {
   AnalysisResult, Severity, ResearchFinding, CognitivePrinciple,
   AudienceLens, Confidence,
 } from "./analysis-data";
+
+function triageScore(f: ResearchFinding, validations: ValidationEvidence[]): number {
+  const sev  = f.severity   === "critical" ? 4 : f.severity   === "warning" ? 2 : f.severity  === "info" ? 1 : 0;
+  const conf = f.confidence === "high"     ? 1.0 : f.confidence === "medium" ? 0.8 : 0.5;
+  const bonus = validationStatus(validations, f.id) === "unvalidated" ? 1.2 : 1.0;
+  return sev * conf * bonus;
+}
 
 const severityMeta: Record<Severity, { icon: any; color: string; bg: string; label: string }> = {
   critical: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Critical" },
@@ -157,6 +165,7 @@ function ValidationBadge({ status }: { status: keyof typeof statusMeta }) {
 
 function FindingCard({
   f, index, active, onSelect, validations, onAddEvidence, onDeleteEvidence,
+  openEvidence, onCloseEvidence,
 }: {
   f: ResearchFinding;
   index: number;
@@ -165,77 +174,96 @@ function FindingCard({
   validations: ValidationEvidence[];
   onAddEvidence: (e: Omit<ValidationEvidence, "id" | "createdAt">) => void;
   onDeleteEvidence: (id: string) => void;
+  openEvidence?: true;
+  onCloseEvidence?: () => void;
 }) {
   const m = severityMeta[f.severity];
   const status = validationStatus(validations, f.id);
   const ev = evidenceFor(validations, f.id);
   return (
     <div
-      className={`w-full text-left rounded-lg border p-4 transition-all ${m.bg} ${
+      className={`rounded-lg border transition-all ${m.bg} ${
         active ? "ring-2 ring-primary shadow-md" : "hover:shadow-sm"
       }`}
     >
-      <button onClick={onSelect} className="w-full text-left">
-        <div className="flex items-start gap-3">
-          <div className={`size-6 rounded-full ${m.color.replace("text-", "bg-").replace("-600", "-500")} text-white flex items-center justify-center shrink-0 text-xs font-semibold`}>
-            {index + 1}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="font-medium">{f.principle}</span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <ConfidenceBadge confidence={f.confidence} />
-                <SeverityBadge severity={f.severity} />
-              </div>
+      {/* Collapsed header — always visible */}
+      <button onClick={onSelect} className="w-full text-left p-3 flex items-center gap-2.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={`size-5 rounded-full ${m.color.replace("text-", "bg-").replace("-600", "-500")} text-white flex items-center justify-center shrink-0 text-[10px] font-semibold cursor-help`}
+            >
+              {index + 1}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">{f.source}</p>
-            <p className="mt-2 text-sm">{f.observation}</p>
-            {f.rule && (
-              <div className="mt-2 rounded-md border bg-white/60 p-2 grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Check</div>
-                  <div className="font-mono">{f.rule.check}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Observed</div>
-                  <div className={`font-mono ${f.rule.passes ? "text-emerald-700" : "text-red-700"}`}>
-                    {f.rule.observed}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Threshold</div>
-                  <div className="font-mono text-muted-foreground">{f.rule.threshold}</div>
-                </div>
-              </div>
-            )}
-            <div className="mt-3 flex items-start gap-2 text-sm">
-              <ArrowRight className="size-4 mt-0.5 text-primary shrink-0" />
-              <span><span className="text-muted-foreground">Recommend:</span> {f.recommendation}</span>
-            </div>
-          </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-xs">
+            Triage #{index + 1} — Severity × Confidence tier, unvalidated findings prioritised. Not a prediction of user impact.
+          </TooltipContent>
+        </Tooltip>
+        <span className="font-medium flex-1 min-w-0 text-sm leading-snug line-clamp-2">{f.principle}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <SeverityBadge severity={f.severity} />
+          {status !== "unvalidated" && <ValidationBadge status={status} />}
+          <ChevronDown
+            className={`size-3.5 text-muted-foreground/60 transition-transform duration-200 ${active ? "rotate-180" : ""}`}
+          />
         </div>
       </button>
 
-      <div className="mt-3 pt-3 border-t border-current/10 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <ValidationBadge status={status} />
-          {ev.length > 0 && (
-            <span className="text-xs text-muted-foreground">{ev.length} log{ev.length === 1 ? "" : "s"}</span>
+      {/* Expanded details — only when active */}
+      {active && (
+        <div className="px-3 pb-3 space-y-2.5 border-t border-current/10 pt-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ConfidenceBadge confidence={f.confidence} />
+            <span className="text-xs text-muted-foreground">{f.source}</span>
+          </div>
+          <p className="text-sm">{f.observation}</p>
+          {f.rule && (
+            <div className="rounded-md border bg-white/60 p-2 grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Check</div>
+                <div className="font-mono">{f.rule.check}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Observed</div>
+                <div className={`font-mono ${f.rule.passes ? "text-emerald-700" : "text-red-700"}`}>
+                  {f.rule.observed}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Threshold</div>
+                <div className="font-mono text-muted-foreground">{f.rule.threshold}</div>
+              </div>
+            </div>
           )}
+          <div className="flex items-start gap-2 text-sm">
+            <ArrowRight className="size-4 mt-0.5 text-primary shrink-0" />
+            <span><span className="text-muted-foreground">Recommend:</span> {f.recommendation}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-current/10">
+            <div className="flex items-center gap-2">
+              <ValidationBadge status={status} />
+              {ev.length > 0 && (
+                <span className="text-xs text-muted-foreground">{ev.length} log{ev.length === 1 ? "" : "s"}</span>
+              )}
+            </div>
+            <ValidationDialog
+              finding={f}
+              validations={validations}
+              onAdd={onAddEvidence}
+              onDelete={onDeleteEvidence}
+              open={openEvidence}
+              onOpenChange={(v) => { if (!v) onCloseEvidence?.(); }}
+              trigger={
+                <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs">
+                  <BookCheck className="size-3.5" />
+                  {ev.length === 0 ? "Add real-user evidence" : "Log more evidence"}
+                </Button>
+              }
+            />
+          </div>
         </div>
-        <ValidationDialog
-          finding={f}
-          validations={validations}
-          onAdd={onAddEvidence}
-          onDelete={onDeleteEvidence}
-          trigger={
-            <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs">
-              <BookCheck className="size-3.5" />
-              {ev.length === 0 ? "Add real-user evidence" : "Log more evidence"}
-            </Button>
-          }
-        />
-      </div>
+      )}
     </div>
   );
 }
@@ -311,6 +339,8 @@ function LensCard({ l }: { l: AudienceLens }) {
   );
 }
 
+type TestContext = { designType: string; audience: string; goal: string };
+
 type Props = {
   result: AnalysisResult;
   activeFindingId: string | null;
@@ -318,15 +348,283 @@ type Props = {
   validations: ValidationEvidence[];
   onAddEvidence: (e: Omit<ValidationEvidence, "id" | "createdAt">) => void;
   onDeleteEvidence: (id: string) => void;
+  context?: TestContext;
+  label?: string;
 };
+
+const DT_LABELS: Record<string, string> = {
+  landing: "landing page", checkout: "checkout flow", dashboard: "dashboard",
+  onboarding: "onboarding flow", mobile: "mobile app screen", form: "form / signup",
+};
+const AUD_LABELS: Record<string, string> = {
+  general: "general consumer", enterprise: "enterprise user", developers: "developer",
+  seniors: "senior / accessibility-first user", genz: "Gen Z / mobile-native user",
+};
+const AUD_SCREENING: Record<string, string> = {
+  general: "- Adults 18–65 who make online purchases at least once a month",
+  enterprise: "- Decision-makers or power users at companies with 50+ employees",
+  developers: "- Software engineers or technical users with at least 2 years of professional experience",
+  seniors: "- Adults 60+ who use digital products weekly; aim for at least 1 participant who uses assistive technology",
+  genz: "- Adults 18–26 who primarily access the internet via a mobile device",
+};
+
+function findingTask(f: ResearchFinding, ctx: TestContext) {
+  const p = f.principle.toLowerCase();
+  const dt = DT_LABELS[ctx.designType] ?? ctx.designType;
+  const aud = AUD_LABELS[ctx.audience] ?? "user";
+
+  if (p.includes("hick") || p.includes("miller"))
+    return {
+      scenario: `You've just arrived at this ${dt} for the first time as a ${aud}.`,
+      prompt: `Without clicking anything, scan the page and tell me out loud: what would you do first, and why?`,
+      observe: ["How long before they commit to a direction?", "Do they mention feeling overwhelmed by choices?", "Do they identify the path that leads to the intended goal?"],
+    };
+  if (p.includes("fitts") || p.includes("touch") || p.includes("target"))
+    return {
+      scenario: `You've decided you want to take the main action on this ${dt}.`,
+      prompt: `Go ahead and do that — think out loud as you find it and complete it.`,
+      observe: ["How quickly do they locate the primary CTA?", "Any hesitation, misdirects, or corrected clicks?", "Do they express uncertainty about what the action will do?"],
+    };
+  if (p.includes("jakob") || p.includes("convention") || p.includes("mental model"))
+    return {
+      scenario: `You're using this ${dt} for the first time.`,
+      prompt: `Where would you expect to find the main navigation or account area? Point to where you'd look first.`,
+      observe: ["Does their expectation match the actual placement?", "Do they express surprise at any layout decision?", "How long to locate the element?"],
+    };
+  if (p.includes("contrast") || p.includes("wcag") || p.includes("color") || p.includes("accessibility"))
+    return {
+      scenario: `Take a look at this ${dt}.`,
+      prompt: `Read any text you notice as you scan the page. Let me know if anything is difficult to read.`,
+      observe: ["Do they skip over any low-contrast areas?", "Do they lean in or squint at any section?", "Do they explicitly mention anything as hard to read?"],
+    };
+  if (p.includes("peak") || p.includes("end") || p.includes("confirmation"))
+    return {
+      scenario: `You've just completed the main action on this ${dt}.`,
+      prompt: `What are you feeling right now? What would you expect to see or happen next?`,
+      observe: ["Do they express confidence the action was completed?", "Is their emotional state positive, neutral, or anxious?", "Do they know what to do next?"],
+    };
+  if (p.includes("restorff") || p.includes("attention") || p.includes("salience"))
+    return {
+      scenario: `I'll show you this ${dt} for 5 seconds, then take it away.`,
+      prompt: `[Show for 5 seconds, then hide] — What do you remember? What stood out most?`,
+      observe: ["Which elements do they recall? (Reveals prioritized salience)", "Did they notice the intended focal element?", "How does recall compare to the design's intended hierarchy?"],
+    };
+  if (p.includes("error") || p.includes("prevention"))
+    return {
+      scenario: `You've accidentally done something on this ${dt} and need to undo it.`,
+      prompt: `How would you undo that? Walk me through what you'd do.`,
+      observe: ["Do they find the undo / cancel path?", "Do they express anxiety about losing data?", "Is the confirmation step noticed or bypassed?"],
+    };
+  if (p.includes("aesthetic"))
+    return {
+      scenario: `Take a moment to look at this ${dt}.`,
+      prompt: `What's your first impression? Would you trust this product based on how it looks? Tell me why.`,
+      observe: ["Is the first impression positive, neutral, or negative?", "Do they connect visual quality to trust?", "Does the aesthetic match their expectations for this category?"],
+    };
+  return {
+    scenario: `You're a ${aud} who wants to ${ctx.goal || "complete the main action"}.`,
+    prompt: `Take a look at this ${dt} and walk me through what you'd do. Think aloud as you go.`,
+    observe: [`Does the participant understand what this ${dt} is for?`, "Do they take the path the design intends?", "Where do they hesitate or express confusion?"],
+  };
+}
+
+function generateTestPlan(result: AnalysisResult, ctx: TestContext, label: string): string {
+  const eligible = result.findings.filter((f) => f.severity === "critical" || f.severity === "warning");
+  const testFindings = eligible.slice(0, 5);
+  const capped = eligible.length > 5;
+  const dt = DT_LABELS[ctx.designType] ?? ctx.designType;
+  const screening = AUD_SCREENING[ctx.audience] ?? "- Relevant users for this design";
+  const sessionLen = testFindings.length <= 3 ? "30–45" : "45–60";
+  const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const warmupPrompt =
+    ctx.designType === "checkout" ? "making an online purchase"
+    : ctx.designType === "dashboard" ? "using a dashboard or analytics tool"
+    : ctx.designType === "onboarding" ? "signing up for a new app"
+    : `using this type of product`;
+
+  const lines: string[] = [];
+  lines.push(`# Usability Test Plan`);
+  lines.push(`## ${label}`);
+  lines.push(`**Design type**: ${dt.charAt(0).toUpperCase() + dt.slice(1)}`);
+  lines.push(`**Target audience**: ${(AUD_LABELS[ctx.audience] ?? ctx.audience).replace(/^\w/, (c) => c.toUpperCase())}`);
+  lines.push(`**Research goal**: ${ctx.goal || "Understand how users interact with this design"}`);
+  lines.push(`**Prepared**: ${date}`);
+  lines.push(`**Recommended participants**: 5 (qualitative usability threshold — Nielsen, 1994)`);
+  lines.push(`**Session length**: ~${sessionLen} min · **Format**: Moderated think-aloud`);
+  lines.push(``);
+  lines.push(`> **Research framing**: This plan was generated from a heuristic pre-screen. Each task tests a hypothesis derived from established UX research — not a confirmed issue. The goal of these sessions is to find out which hypotheses are real problems for *your* users.`);
+  if (capped) {
+    lines.push(``);
+    lines.push(`> **Scope note**: Showing top 5 of ${eligible.length} critical/warning findings — capped to keep the session under ${sessionLen} min. The remaining ${eligible.length - 5} appear in the full heuristic export.`);
+  }
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## Participant screening`);
+  lines.push(screening);
+  lines.push(`- Comfortable with think-aloud protocol (no prior experience required)`);
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## Session structure`);
+  lines.push(``);
+  lines.push(`### Opening (5 min)`);
+  lines.push(`> "Today I'll show you a ${dt}. There are no right or wrong answers — I want to understand how you think, not test your skills. Please think out loud as you go through the tasks."`);
+  lines.push(``);
+  lines.push(`- Start screen recording`);
+  lines.push(`- Confirm participant is comfortable with think-aloud`);
+  lines.push(``);
+  lines.push(`### Warm-up (5 min)`);
+  lines.push(`> "Walk me through how you typically approach ${warmupPrompt}."`);
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## Tasks (${testFindings.length})`);
+  lines.push(``);
+
+  testFindings.forEach((f, i) => {
+    const task = findingTask(f, ctx);
+    const tier = f.confidence === "high" ? "Deterministic" : f.confidence === "medium" ? "Heuristic" : "Speculative";
+    lines.push(`### Task ${i + 1} of ${testFindings.length}: ${f.principle}`);
+    lines.push(``);
+    lines.push(`**Research hypothesis**: ${f.observation}`);
+    lines.push(`**Source**: ${f.source} · ${tier} confidence · ${f.severity.charAt(0).toUpperCase() + f.severity.slice(1)}`);
+    lines.push(``);
+    if (f.confidence === "low") {
+      lines.push(`> ⚠️ **Speculative finding** — the AI flagged this as a pattern it cannot verify from the screenshot alone. Treat this task as exploratory: you are checking *whether* a problem exists here, not confirming one that does. Weight participant responses accordingly.`);
+      lines.push(``);
+    }
+    lines.push(`**Scenario** *(set the scene, do not show the design yet)*:`);
+    lines.push(`> ${task.scenario}`);
+    lines.push(``);
+    lines.push(`**Task prompt** *(read aloud, do not paraphrase)*:`);
+    lines.push(`> ${task.prompt}`);
+    lines.push(``);
+    lines.push(`**What to watch for**:`);
+    task.observe.forEach((o) => lines.push(`- ${o}`));
+    lines.push(``);
+    lines.push(`**Note-taking**:`);
+    lines.push(`- [ ] Completed without assistance`);
+    lines.push(`- [ ] Hesitated before acting`);
+    lines.push(`- [ ] Expressed confusion or frustration`);
+    lines.push(`- [ ] Asked a question or requested help`);
+    lines.push(`- **SEQ — Single Ease Question (1 = very difficult, 7 = very easy; Sauro & Dumas, 2009)**: ___`);
+    lines.push(`- **Time on task**: ___`);
+    lines.push(`- **Observer notes**: ___________`);
+    lines.push(``);
+    lines.push(`---`);
+    lines.push(``);
+  });
+
+  lines.push(`## Debrief (10 min)`);
+  lines.push(``);
+  lines.push(`1. "What stood out most — positively or negatively?"`);
+  lines.push(`2. "What, if anything, would stop you from: ${ctx.goal}?"`);
+  lines.push(`3. "On a scale of 1–10, how confident are you that you could complete the main action again without help?"`);
+
+  if (result.lenses.length > 0 && result.lenses[0].questionsToAsk.length > 0) {
+    lines.push(``);
+    lines.push(`**Additional questions (${result.lenses[0].archetype} archetype)**:`);
+    result.lenses[0].questionsToAsk.forEach((q, i) => lines.push(`${i + 4}. "${q}"`));
+  }
+
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## After each session`);
+  lines.push(``);
+  lines.push(`1. Note immediately: which hypotheses did this session confirm or refute?`);
+  lines.push(`2. Open Cognition → this analysis → click **"Log real-user evidence"** on each finding`);
+  lines.push(`3. Record: verdict (confirmed / refuted / inconclusive), method, sample size, and note`);
+  lines.push(``);
+  lines.push(`After 5 sessions, check the **Patterns** tab to see which findings held across participants.`);
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`*Generated by Cognition · ${date} · Heuristic pre-screen only — not a substitute for professional UX research*`);
+
+  return lines.join("\n");
+}
+
+function TestPlanDialog({ result, context, label }: { result: AnalysisResult; context: TestContext; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const plan = useMemo(() => generateTestPlan(result, context, label), [result, context, label]);
+  const eligibleCount = result.findings.filter((f) => f.severity === "critical" || f.severity === "warning").length;
+  const testCount = Math.min(eligibleCount, 5);
+
+  const download = () => {
+    const blob = new Blob([plan], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `test-plan-${label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(plan);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+      >
+        <FileText className="size-3.5" /> Test plan
+      </button>
+      <DialogContent className="max-w-2xl flex flex-col gap-0 p-0 overflow-hidden max-h-[85vh]">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+          <DialogTitle>Usability Test Plan</DialogTitle>
+          <DialogDescription>
+            {eligibleCount > 5
+              ? `Top ${testCount} of ${eligibleCount} eligible findings — capped for session length. Copy into Notion, Confluence, or download as Markdown.`
+              : `${testCount} task${testCount === 1 ? "" : "s"} — ready to run with 5 participants. Copy into Notion, Confluence, or download as Markdown.`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 min-h-0 overflow-auto border-y bg-muted/30 px-6 py-4">
+          <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed">{plan}</pre>
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4 shrink-0">
+          <button
+            onClick={copy}
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <button
+            onClick={download}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium shadow-xs hover:bg-primary/90 transition-colors"
+          >
+            <Download className="size-3.5" /> Download .md
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function ResultsPanel({
   result, activeFindingId, onSelectFinding,
   validations, onAddEvidence, onDeleteEvidence,
+  context, label,
 }: Props) {
   const [severityFilter, setSeverityFilter] = useState<Set<Severity>>(
     new Set(["critical", "warning", "info", "pass"])
   );
+  const [bannerDismissed, setBannerDismissed] = useState(
+    () => localStorage.getItem("cognition.honestyBannerDismissed") === "true"
+  );
+  const dismissBanner = () => {
+    localStorage.setItem("cognition.honestyBannerDismissed", "true");
+    setBannerDismissed(true);
+  };
+  const [openEvidenceForId, setOpenEvidenceForId] = useState<string | null>(null);
 
   const counts = useMemo(
     () =>
@@ -337,10 +635,49 @@ export function ResultsPanel({
     [result]
   );
 
+  // Sorted by triage score: severity × confidence × unvalidated-bonus
   const visibleFindings = useMemo(
-    () => result.findings.filter((f) => severityFilter.has(f.severity)),
-    [result, severityFilter]
+    () =>
+      result.findings
+        .filter((f) => severityFilter.has(f.severity))
+        .map((f) => ({ f, score: triageScore(f, validations) }))
+        .sort((a, b) => b.score - a.score)
+        .map(({ f }) => f),
+    [result, severityFilter, validations]
   );
+
+  // Keyboard navigation for findings
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable
+      ) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!visibleFindings.length) return;
+
+      const currentIdx = activeFindingId
+        ? visibleFindings.findIndex((f) => f.id === activeFindingId)
+        : -1;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        onSelectFinding(visibleFindings[(currentIdx + 1) % visibleFindings.length].id);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = (currentIdx <= 0 ? visibleFindings.length : currentIdx) - 1;
+        onSelectFinding(visibleFindings[prev].id);
+      } else if ((e.key === "Enter" || e.key === " ") && activeFindingId) {
+        e.preventDefault();
+        onSelectFinding(null);
+      } else if (e.key === "e" && activeFindingId) {
+        setOpenEvidenceForId(activeFindingId);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeFindingId, visibleFindings, onSelectFinding]);
 
   const validatedCount = useMemo(
     () => result.findings.filter((f) => validationStatus(validations, f.id) !== "unvalidated").length,
@@ -398,17 +735,24 @@ export function ResultsPanel({
   };
 
   return (
-    <div className="flex flex-col h-full gap-4 min-h-0">
+    <div className="flex flex-col gap-4">
       {/* Honesty banner */}
-      <div className="shrink-0 rounded-lg border bg-amber-50 border-amber-200 p-3 flex items-start gap-2.5">
-        <ShieldAlert className="size-4 text-amber-700 mt-0.5 shrink-0" />
-        <div className="text-xs text-amber-900 leading-relaxed">
-          <span className="font-medium">This is a heuristic first pass, not user research.</span>{" "}
-          An LLM can pattern-match against established UX principles, but it doesn't experience
-          your design the way a person does. Use the findings as a checklist, then validate
-          with real humans before treating anything as truth.
+      {!bannerDismissed && (
+        <div className="shrink-0 rounded-lg border bg-amber-50 border-amber-200 p-3 flex items-start gap-2.5">
+          <ShieldAlert className="size-4 text-amber-700 mt-0.5 shrink-0" />
+          <div className="text-xs text-amber-900 leading-relaxed flex-1">
+            <span className="font-medium">Heuristic first pass — not user research.</span>{" "}
+            Pattern-matched against UX principles. Validate with real users before treating anything as truth.
+          </div>
+          <button
+            onClick={dismissBanner}
+            className="text-amber-600 hover:text-amber-900 ml-1 shrink-0"
+            aria-label="Dismiss"
+          >
+            <X className="size-3.5" />
+          </button>
         </div>
-      </div>
+      )}
 
       <Card className="shrink-0">
         <CardContent className="p-4 space-y-3">
@@ -427,9 +771,14 @@ export function ResultsPanel({
                 tip="Deterministic checks like contrast and touch targets. Reasonably reliable."
               />
             </div>
-            <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={exportReport}>
-              <Download className="size-3.5" /> Export
-            </Button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {context && label && (
+                <TestPlanDialog result={result} context={context} label={label} />
+              )}
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={exportReport}>
+                <Download className="size-3.5" /> Export
+              </Button>
+            </div>
           </div>
 
           <Separator />
@@ -462,7 +811,7 @@ export function ResultsPanel({
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="research" className="flex-1 flex flex-col min-h-0">
+      <Tabs defaultValue="research" className="flex flex-col">
         <TabsList className="shrink-0 grid grid-cols-3 w-full">
           <TabsTrigger value="research" className="gap-1.5">
             <BookOpen className="size-4" /> Heuristics
@@ -475,7 +824,7 @@ export function ResultsPanel({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="research" className="flex-1 min-h-0 mt-3 flex flex-col gap-2">
+        <TabsContent value="research" className="mt-3 flex flex-col gap-2">
           <div className="flex items-center gap-1.5 flex-wrap text-xs">
             <Filter className="size-3.5 text-muted-foreground" />
             {(["critical", "warning", "info", "pass"] as Severity[]).map((s) => {
@@ -494,52 +843,48 @@ export function ResultsPanel({
               );
             })}
           </div>
-          <ScrollArea className="flex-1 min-h-0 pr-3">
-            <div className="space-y-3">
-              {visibleFindings.map((f) => (
-                <FindingCard
-                  key={f.id}
-                  f={f}
-                  index={result.findings.indexOf(f)}
-                  active={activeFindingId === f.id}
-                  onSelect={() => onSelectFinding(activeFindingId === f.id ? null : f.id)}
-                  validations={validations}
-                  onAddEvidence={onAddEvidence}
-                  onDeleteEvidence={onDeleteEvidence}
-                />
-              ))}
-              {visibleFindings.length === 0 && (
-                <div className="text-center text-sm text-muted-foreground py-10">
-                  No findings match the current filter.
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </TabsContent>
-
-        <TabsContent value="cognitive" className="flex-1 min-h-0 mt-3">
-          <ScrollArea className="flex-1 min-h-0 pr-3">
-            <Card>
-              <CardContent className="p-2 divide-y">
-                {result.principles.map((p) => <PrincipleRow key={p.id} p={p} />)}
-              </CardContent>
-            </Card>
-          </ScrollArea>
-        </TabsContent>
-
-        <TabsContent value="humans" className="flex-1 min-h-0 mt-3">
-          <ScrollArea className="flex-1 min-h-0 pr-3">
-            <div className="space-y-3">
-              <div className="rounded-lg border bg-card p-3 text-xs text-muted-foreground leading-relaxed">
-                <span className="font-medium text-foreground">Synthetic users for iteration, not validation.</span>{" "}
-                You can rehearse interview scripts against an archetype to spot leading questions or
-                gaps — useful prep work. But a general LLM isn't fine-tuned on your user base, so
-                the responses are fiction. <span className="font-medium text-foreground">No real users, no UX.</span>
+          <div className="space-y-3">
+            {visibleFindings.map((f, idx) => (
+              <FindingCard
+                key={f.id}
+                f={f}
+                index={idx}
+                active={activeFindingId === f.id}
+                onSelect={() => onSelectFinding(activeFindingId === f.id ? null : f.id)}
+                validations={validations}
+                onAddEvidence={onAddEvidence}
+                onDeleteEvidence={onDeleteEvidence}
+                openEvidence={openEvidenceForId === f.id ? true : undefined}
+                onCloseEvidence={() => setOpenEvidenceForId(null)}
+              />
+            ))}
+            {visibleFindings.length === 0 && (
+              <div className="text-center text-sm text-muted-foreground py-10">
+                No findings match the current filter.
               </div>
-              {result.lenses.map((l) => <LensCard key={l.id} l={l} />)}
-              <HumanTestingPanel result={result} />
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="cognitive" className="mt-3">
+          <Card>
+            <CardContent className="p-2 divide-y">
+              {result.principles.map((p) => <PrincipleRow key={p.id} p={p} />)}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="humans" className="mt-3">
+          <div className="space-y-3">
+            <div className="rounded-lg border bg-card p-3 text-xs text-muted-foreground leading-relaxed">
+              <span className="font-medium text-foreground">Synthetic users for iteration, not validation.</span>{" "}
+              You can rehearse interview scripts against an archetype to spot leading questions or
+              gaps — useful prep work. But a general LLM isn't fine-tuned on your user base, so
+              the responses are fiction. <span className="font-medium text-foreground">No real users, no UX.</span>
             </div>
-          </ScrollArea>
+            {result.lenses.map((l) => <LensCard key={l.id} l={l} />)}
+            <HumanTestingPanel result={result} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

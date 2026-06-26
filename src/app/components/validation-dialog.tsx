@@ -18,6 +18,8 @@ type Props = {
   onAdd: (e: Omit<ValidationEvidence, "id" | "createdAt">) => void;
   onDelete: (id: string) => void;
   trigger: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 const verdictMeta = {
@@ -26,8 +28,14 @@ const verdictMeta = {
   inconclusive: { icon: MinusCircle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "Inconclusive" },
 };
 
-export function ValidationDialog({ finding, validations, onAdd, onDelete, trigger }: Props) {
-  const [open, setOpen] = useState(false);
+export function ValidationDialog({ finding, validations, onAdd, onDelete, trigger, open: externalOpen, onOpenChange: externalOnOpenChange }: Props) {
+  const [localOpen, setLocalOpen] = useState(false);
+
+  const open = externalOpen !== undefined ? externalOpen : localOpen;
+  const setOpen = (val: boolean) => {
+    setLocalOpen(val);
+    externalOnOpenChange?.(val);
+  };
   const [verdict, setVerdict] = useState<"confirmed" | "refuted" | "inconclusive">("confirmed");
   const [method, setMethod] = useState("Moderated test");
   const [sampleSize, setSampleSize] = useState<string>("5");

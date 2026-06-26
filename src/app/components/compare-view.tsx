@@ -115,7 +115,7 @@ export function CompareView({ a, b, onSwap, onClose }: Props) {
       </CardHeader>
       <Separator />
       <CardContent className="flex-1 overflow-auto p-5 space-y-5">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             {sideHeader(a, "A")}
             <div className="aspect-video rounded-md overflow-hidden bg-muted">

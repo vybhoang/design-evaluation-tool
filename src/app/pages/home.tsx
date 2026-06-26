@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { DesignCanvas, type AnalysisContext } from "../components/design-canvas";
 import { generateAnalysis } from "../components/analysis-data";
+import { analyzeWithClaude, isLiveAnalysisEnabled } from "../components/claude-vision-analysis";
 import { imageToThumbnail, type HistoryEntry, formatRelative } from "../components/history-store";
 import { useStore } from "../store";
 import { WorkflowStepper } from "../components/workflow-stepper";
@@ -10,7 +11,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { X } from "lucide-react";
 
-const STAGES = [
+const MOCK_STAGES = [
   "Extracting visual hierarchy…",
   "Checking WCAG rules (contrast, target size)…",
   "Cross-referencing NN/g & cognitive-load research…",
@@ -39,17 +40,31 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [stage, setStage] = useState("");
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!context.imageUrl) return;
     setIsAnalyzing(true);
-    STAGES.forEach((s, i) =>
-      setTimeout(() => {
-        setStage(s);
-        if (i < STAGES.length - 1) toast(s);
-      }, i * 600)
-    );
-    setTimeout(async () => {
-      const r = generateAnalysis(context.designType, context.audience);
+    setStage("Starting…");
+    try {
+      let r;
+      if (isLiveAnalysisEnabled()) {
+        r = await analyzeWithClaude(context, (s) => {
+          setStage(s);
+          toast(s);
+        });
+      } else {
+        // Mock path: simulate staged progress with delays
+        await new Promise<void>((resolve) => {
+          MOCK_STAGES.forEach((s, i) =>
+            setTimeout(() => {
+              setStage(s);
+              if (i < MOCK_STAGES.length - 1) toast(s);
+              if (i === MOCK_STAGES.length - 1) resolve();
+            }, i * 600 + 200)
+          );
+        });
+        r = generateAnalysis(context.designType, context.audience);
+      }
+
       const thumb = await imageToThumbnail(context.imageUrl!, 200);
       const fullDataUrl = await imageToThumbnail(context.imageUrl!, 1400);
       const entry: HistoryEntry = {
@@ -61,17 +76,41 @@ export default function Home() {
         result: r,
       };
       addEntry(entry);
-      setIsAnalyzing(false);
-      setStage("");
       toast.success("Analysis complete");
       navigate(`/analysis/${entry.id}`);
-    }, STAGES.length * 600 + 200);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("401")) {
+        toast.error("Invalid API key — check the ANTHROPIC_API_KEY configured for this deployment");
+      } else if (msg.includes("503")) {
+        toast.error("Live analysis isn't configured on this deployment — falling back to heuristic mock");
+      } else {
+        toast.error("Analysis failed — falling back to heuristic mock");
+        // Fallback: save a mock result so the user isn't left stranded
+        try {
+          const r = generateAnalysis(context.designType, context.audience);
+          const thumb = await imageToThumbnail(context.imageUrl!, 200);
+          const fullDataUrl = await imageToThumbnail(context.imageUrl!, 1400);
+          addEntry({ id: makeId(), createdAt: Date.now(), label: defaultLabel(context), thumbnail: thumb, context: { ...context, imageUrl: fullDataUrl }, result: r });
+          navigate(`/analysis/${history[0]?.id ?? ""}`);
+        } catch { /* ignore */ }
+      }
+    } finally {
+      setIsAnalyzing(false);
+      setStage("");
+    }
   };
 
   const recent = history.slice(0, 4);
 
   return (
     <>
+      <div>
+        <h1 className="font-serif text-2xl tracking-tight">New analysis</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Upload a design, set context, and get AI-powered UX findings with a ready-to-run test plan.
+        </p>
+      </div>
       <WorkflowStepper hasImage={!!context.imageUrl} hasResult={false} />
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 flex-1 min-h-0">
         <DesignCanvas
@@ -97,8 +136,11 @@ export default function Home() {
           }
         />
         <aside className="space-y-3 min-w-0">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-lg tracking-tight">Recent runs</h3>
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="font-serif text-lg tracking-tight">Recent</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Pick up a past analysis</p>
+            </div>
             {history.length > 4 && (
               <Button variant="ghost" size="sm" onClick={() => navigate("/history")}>
                 See all
@@ -108,7 +150,7 @@ export default function Home() {
           {recent.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="p-6 text-sm text-muted-foreground text-center">
-                No runs yet. Your past analyses will appear here.
+                No analyses yet — run your first one and it will appear here.
               </CardContent>
             </Card>
           ) : (

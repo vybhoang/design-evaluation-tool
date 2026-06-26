@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Radio, GitCompareArrows } from "lucide-react";
+import { ArrowLeft, Radio, GitCompareArrows, Share2, BarChart3 } from "lucide-react";
 import { AnnotatedDesign } from "../components/annotated-design";
 import { ResultsPanel } from "../components/results-panel";
 import { WorkflowStepper } from "../components/workflow-stepper";
 import { Button } from "../components/ui/button";
 import { useStore } from "../store";
+import { downloadSnapshot } from "../components/snapshot-export";
 
 export default function AnalysisPage() {
   const { id } = useParams();
@@ -44,6 +45,19 @@ export default function AnalysisPage() {
               <GitCompareArrows className="size-4" /> Compare
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => downloadSnapshot(entry, validations)}
+          >
+            <Share2 className="size-4" /> Snapshot
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Link to={`/analysis/${entry.id}/instruments`}>
+              <BarChart3 className="size-4" /> Instruments
+            </Link>
+          </Button>
           <Button asChild size="sm" className="gap-1.5">
             <Link to={`/analysis/${entry.id}/session`}>
               <Radio className="size-4" /> Moderate session
@@ -61,14 +75,16 @@ export default function AnalysisPage() {
         }}
       />
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] gap-6">
-        <AnnotatedDesign
-          imageUrl={entry.context.imageUrl!}
-          result={entry.result}
-          activeFindingId={activeFindingId}
-          onSelectFinding={setActiveFindingId}
-          onClear={() => navigate("/new")}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
+        <div className="lg:sticky lg:top-20">
+          <AnnotatedDesign
+            imageUrl={entry.context.imageUrl!}
+            result={entry.result}
+            activeFindingId={activeFindingId}
+            onSelectFinding={setActiveFindingId}
+            onClear={() => navigate("/new")}
+          />
+        </div>
         <ResultsPanel
           result={entry.result}
           activeFindingId={activeFindingId}
@@ -76,6 +92,8 @@ export default function AnalysisPage() {
           validations={validations}
           onAddEvidence={addEvidence}
           onDeleteEvidence={deleteEvidence}
+          context={entry.context}
+          label={entry.label}
         />
       </div>
 

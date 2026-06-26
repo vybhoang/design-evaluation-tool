@@ -1,17 +1,17 @@
-import { Wand2, BookCheck, Users, ArrowRight, Check } from "lucide-react";
+import { ImageUp, BookCheck, Users, ArrowRight, Check } from "lucide-react";
 
 const STEPS = [
   {
     id: "generate",
-    icon: Wand2,
-    label: "Generate UI",
-    sub: "v0, Cursor, Figma Make…",
+    icon: ImageUp,
+    label: "Upload design",
+    sub: "PNG, JPG or screenshot",
   },
   {
     id: "check",
     icon: BookCheck,
     label: "Heuristic check",
-    sub: "Validate against UX research",
+    sub: "AI-powered UX review",
   },
   {
     id: "test",

@@ -1,15 +1,15 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router";
 import {
-  TrendingUp, TrendingDown, Minus, X,
+  TrendingUp, TrendingDown, Minus,
   CheckCircle2, XCircle, MinusCircle,
   Activity, Users, Sparkles, AlertCircle,
   Flame, ShieldCheck,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
-import { ScrollArea } from "./ui/scroll-area";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "./ui/chart";
 import type { HistoryEntry } from "./history-store";
 import type { ValidationEvidence } from "./validation-store";
 import { formatRelative } from "./history-store";
@@ -18,10 +18,17 @@ import type { Severity } from "./analysis-data";
 type Props = {
   history: HistoryEntry[];
   validations: ValidationEvidence[];
-  onClose: () => void;
 };
 
-type RunPoint = { idx: number; label: string; createdAt: number; severity: Severity };
+type RunPoint = {
+  idx: number;
+  label: string;
+  createdAt: number;
+  severity: Severity;
+  confirmed: number;
+  refuted: number;
+  inconclusive: number;
+};
 
 type Aggregate = {
   principle: string;
@@ -49,7 +56,7 @@ function computeTrend(runIndices: number[], totalRuns: number): Trend {
 }
 
 // Mini per-run severity timeline
-function MiniTimeline({ runData, totalRuns }: { runData: RunPoint[]; totalRuns: number }) {
+function MiniTimeline({ runData, totalRuns, runLabels }: { runData: RunPoint[]; totalRuns: number; runLabels: string[] }) {
   const sevColor: Record<Severity, string> = {
     critical: "bg-red-500",
     warning:  "bg-amber-400",
@@ -57,14 +64,25 @@ function MiniTimeline({ runData, totalRuns }: { runData: RunPoint[]; totalRuns: 
     pass:     "bg-emerald-500",
   };
   return (
-    <div className="flex items-center gap-0.5 flex-wrap" aria-label="Run timeline">
+    <div className="flex items-center gap-0.5 overflow-x-auto" aria-label="Run timeline">
       {Array.from({ length: totalRuns }, (_, i) => {
         const d = runData.find((r) => r.idx === i);
+        const label = runLabels[i] ?? `Run ${i + 1}`;
+        const evidenceBits = d
+          ? [
+              d.confirmed ? `${d.confirmed} confirmed` : null,
+              d.refuted ? `${d.refuted} refuted` : null,
+              d.inconclusive ? `${d.inconclusive} inconclusive` : null,
+            ].filter(Boolean).join(", ")
+          : "";
+        const title = d
+          ? `${label}: ${d.severity}${evidenceBits ? ` · ${evidenceBits}` : ""}`
+          : `${label}: not flagged this run`;
         return (
           <div
             key={i}
-            className={`size-2.5 rounded-sm transition-colors ${d ? sevColor[d.severity] : "bg-muted"}`}
-            title={d ? `Run ${i + 1}: ${d.severity}` : `Run ${i + 1}: not present`}
+            className={`size-2.5 rounded-sm shrink-0 transition-colors ${d ? sevColor[d.severity] : "bg-muted"}`}
+            title={title}
           />
         );
       })}
@@ -72,13 +90,13 @@ function MiniTimeline({ runData, totalRuns }: { runData: RunPoint[]; totalRuns: 
   );
 }
 
-function AggCard({ a, totalRuns, variant = "normal" }: { a: Aggregate; totalRuns: number; variant?: "failure" | "validated" | "normal" }) {
+function AggCard({ a, totalRuns, runLabels, variant = "normal" }: { a: Aggregate; totalRuns: number; runLabels: string[]; variant?: "failure" | "validated" | "normal" }) {
   const totalEv = a.confirmed + a.refuted + a.inconclusive;
   const trend = computeTrend(a.runIndices, totalRuns);
 
   const borderClass =
-    variant === "failure"  ? "border-red-300 bg-red-500/5 dark:border-red-800 dark:bg-red-500/10" :
-    variant === "validated" ? "border-emerald-300 bg-emerald-500/5 dark:border-emerald-800 dark:bg-emerald-500/10" :
+    variant === "failure"  ? "border-l-4 border-l-red-500 dark:border-l-red-600" :
+    variant === "validated" ? "border-l-4 border-l-emerald-500 dark:border-l-emerald-600" :
     "";
 
   return (
@@ -95,12 +113,12 @@ function AggCard({ a, totalRuns, variant = "normal" }: { a: Aggregate; totalRuns
               )}
               {variant === "validated" && (
                 <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white text-xs gap-1">
-                  <ShieldCheck className="size-3" /> Validated
+                  <ShieldCheck className="size-3" /> Validated ×{a.confirmedRunCount}
                 </Badge>
               )}
               {variant === "normal" && a.confirmed >= 2 && (
-                <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white text-xs gap-1">
-                  <TrendingUp className="size-3" /> Pattern
+                <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-400 text-xs gap-1">
+                  <TrendingUp className="size-3" /> Confirmed ×{a.confirmed}
                 </Badge>
               )}
               {a.totalOccurrences >= 2 && totalEv === 0 && (
@@ -149,7 +167,7 @@ function AggCard({ a, totalRuns, variant = "normal" }: { a: Aggregate; totalRuns
         {totalRuns >= 2 && (
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Severity per run</div>
-            <MiniTimeline runData={a.runData} totalRuns={totalRuns} />
+            <MiniTimeline runData={a.runData} totalRuns={totalRuns} runLabels={runLabels} />
           </div>
         )}
 
@@ -182,7 +200,7 @@ function AggCard({ a, totalRuns, variant = "normal" }: { a: Aggregate; totalRuns
         )}
 
         {totalEv === 0 && (
-          <div className="text-xs text-muted-foreground italic">
+          <div className="text-xs text-muted-foreground border border-dashed rounded-md px-2 py-1.5">
             No real-user evidence yet. Still a hypothesis.
           </div>
         )}
@@ -191,11 +209,15 @@ function AggCard({ a, totalRuns, variant = "normal" }: { a: Aggregate; totalRuns
   );
 }
 
-export function PatternsView({ history, validations, onClose }: Props) {
+export function PatternsView({ history, validations }: Props) {
+  const navigate = useNavigate();
+
   const sortedHistory = useMemo(
     () => [...history].sort((a, b) => a.createdAt - b.createdAt),
     [history]
   );
+
+  const runLabels = useMemo(() => sortedHistory.map((h) => h.label), [sortedHistory]);
 
   const aggregates = useMemo<Aggregate[]>(() => {
     const byPrinciple = new Map<string, Aggregate>();
@@ -218,7 +240,15 @@ export function PatternsView({ history, validations, onClose }: Props) {
 
         agg.totalOccurrences += 1;
         agg.runIndices.push(runIdx);
-        agg.runData.push({ idx: runIdx, label: h.label, createdAt: h.createdAt, severity: f.severity });
+        agg.runData.push({
+          idx: runIdx,
+          label: h.label,
+          createdAt: h.createdAt,
+          severity: f.severity,
+          confirmed: evidence.filter((e) => e.verdict === "confirmed").length,
+          refuted: evidence.filter((e) => e.verdict === "refuted").length,
+          inconclusive: evidence.filter((e) => e.verdict === "inconclusive").length,
+        });
 
         if (f.severity === "critical" || f.severity === "warning") {
           agg.criticalOrWarningRuns += 1;
@@ -257,6 +287,26 @@ export function PatternsView({ history, validations, onClose }: Props) {
       });
   }, [sortedHistory, validations]);
 
+  const chartData = useMemo(
+    () =>
+      sortedHistory.map((h, i) => ({
+        run: `Run ${i + 1}`,
+        label: h.label,
+        critical: h.result.findings.filter((f) => f.severity === "critical").length,
+        warning: h.result.findings.filter((f) => f.severity === "warning").length,
+        info: h.result.findings.filter((f) => f.severity === "info").length,
+        pass: h.result.findings.filter((f) => f.severity === "pass").length,
+      })),
+    [sortedHistory]
+  );
+
+  const chartConfig: ChartConfig = {
+    critical: { label: "Critical", color: "#ef4444" },
+    warning: { label: "Warning", color: "#fbbf24" },
+    info: { label: "Info", color: "#60a5fa" },
+    pass: { label: "Pass", color: "#10b981" },
+  };
+
   const recurringFailures = useMemo(
     () => aggregates.filter((a) => a.criticalOrWarningRuns >= 3),
     [aggregates]
@@ -275,23 +325,15 @@ export function PatternsView({ history, validations, onClose }: Props) {
   ).length;
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden">
-      <CardHeader className="flex-row items-center justify-between gap-2 pb-3">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="size-4" /> Patterns across runs
-          </CardTitle>
-          <CardDescription>
-            Recurring findings ranked by how often real users have confirmed them.
-          </CardDescription>
-        </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="size-4" />
-        </Button>
-      </CardHeader>
-      <Separator />
+    <>
+      <div>
+        <h1 className="font-serif text-2xl tracking-tight">Patterns across runs</h1>
+        <p className="text-sm text-muted-foreground">
+          Recurring findings ranked by how often real users have confirmed them.
+        </p>
+      </div>
 
-      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         <Stat icon={Sparkles} label="Runs" value={totalRuns} />
         <Stat icon={Users} label="Evidence logs" value={totalEvidence} />
         <Stat icon={CheckCircle2} label="Confirmed" value={totalConfirmed} color="text-emerald-600 dark:text-emerald-400" />
@@ -304,68 +346,94 @@ export function PatternsView({ history, validations, onClose }: Props) {
         />
       </div>
 
-      <Separator />
+      {sortedHistory.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold mb-2">Findings per run</h2>
+          <ChartContainer config={chartConfig} className="aspect-auto h-[180px] w-full">
+            <BarChart data={chartData}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="run" tickLine={false} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.label}
+                  />
+                }
+              />
+              <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" />
+              <Bar dataKey="warning" stackId="a" fill="var(--color-warning)" />
+              <Bar dataKey="info" stackId="a" fill="var(--color-info)" />
+              <Bar dataKey="pass" stackId="a" fill="var(--color-pass)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ChartContainer>
+        </div>
+      )}
 
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          {aggregates.length === 0 && (
-            <div className="text-center text-sm text-muted-foreground py-12">
-              No runs yet. Analyses you complete will be aggregated here.
-            </div>
-          )}
+      <div className="space-y-6">
+        {aggregates.length === 0 && (
+          <Card className="border-dashed">
+            <CardContent className="p-12 text-center text-sm text-muted-foreground">
+              No runs yet.{" "}
+              <button onClick={() => navigate("/new")} className="underline">
+                Start a new one
+              </button>
+              .
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Recurring failures */}
-          {recurringFailures.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Flame className="size-4 text-red-600" />
-                <h2 className="text-sm font-semibold">Recurring failures</h2>
-                <Badge variant="outline" className="text-red-700 border-red-200 text-xs">{recurringFailures.length}</Badge>
-                <span className="text-xs text-muted-foreground">— critical or warning in ≥ 3 runs</span>
-              </div>
-              <div className="space-y-3">
-                {recurringFailures.map((a) => (
-                  <AggCard key={a.principle + "-failure"} a={a} totalRuns={totalRuns} variant="failure" />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Validated across runs */}
-          {validatedAcrossRuns.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <ShieldCheck className="size-4 text-emerald-600" />
-                <h2 className="text-sm font-semibold">Validated across runs</h2>
-                <Badge variant="outline" className="text-emerald-700 border-emerald-200 text-xs">{validatedAcrossRuns.length}</Badge>
-                <span className="text-xs text-muted-foreground">— confirmed by real users in ≥ 2 separate sessions</span>
-              </div>
-              <div className="space-y-3">
-                {validatedAcrossRuns.map((a) => (
-                  <AggCard key={a.principle + "-validated"} a={a} totalRuns={totalRuns} variant="validated" />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* All findings */}
+        {/* Recurring failures */}
+        {recurringFailures.length > 0 && (
           <section>
-            {(recurringFailures.length > 0 || validatedAcrossRuns.length > 0) && (
-              <div className="flex items-center gap-2 mb-3">
-                <Activity className="size-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">All findings</h2>
-                <Badge variant="outline" className="text-xs">{aggregates.length}</Badge>
-              </div>
-            )}
+            <div className="flex items-center gap-2 mb-3">
+              <Flame className="size-4 text-red-600" />
+              <h2 className="text-sm font-semibold font-serif">Recurring failures</h2>
+              <Badge variant="outline" className="text-red-700 border-red-200 text-xs">{recurringFailures.length}</Badge>
+              <span className="text-xs text-muted-foreground">— critical or warning in ≥ 3 runs</span>
+            </div>
             <div className="space-y-3">
-              {aggregates.map((a) => (
-                <AggCard key={a.principle} a={a} totalRuns={totalRuns} variant="normal" />
+              {recurringFailures.map((a) => (
+                <AggCard key={a.principle + "-failure"} a={a} totalRuns={totalRuns} runLabels={runLabels} variant="failure" />
               ))}
             </div>
           </section>
-        </div>
-      </ScrollArea>
-    </Card>
+        )}
+
+        {/* Validated across runs */}
+        {validatedAcrossRuns.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldCheck className="size-4 text-emerald-600" />
+              <h2 className="text-sm font-semibold font-serif">Validated across runs</h2>
+              <Badge variant="outline" className="text-emerald-700 border-emerald-200 text-xs">{validatedAcrossRuns.length}</Badge>
+              <span className="text-xs text-muted-foreground">— confirmed by real users in ≥ 2 separate sessions</span>
+            </div>
+            <div className="space-y-3">
+              {validatedAcrossRuns.map((a) => (
+                <AggCard key={a.principle + "-validated"} a={a} totalRuns={totalRuns} runLabels={runLabels} variant="validated" />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* All findings */}
+        <section>
+          {(recurringFailures.length > 0 || validatedAcrossRuns.length > 0) && (
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="size-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold font-serif">All findings</h2>
+              <Badge variant="outline" className="text-xs">{aggregates.length}</Badge>
+            </div>
+          )}
+          <div className="space-y-3">
+            {aggregates.map((a) => (
+              <AggCard key={a.principle} a={a} totalRuns={totalRuns} runLabels={runLabels} variant="normal" />
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 

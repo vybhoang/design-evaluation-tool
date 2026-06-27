@@ -68,7 +68,7 @@ export function ValidationDialog({ finding, validations, onAdd, onDelete, trigge
             <BookCheck className="size-4" /> Real-user evidence
           </DialogTitle>
           <DialogDescription>
-            Log what actual humans did with this design. Without evidence, the finding stays a hypothesis.
+            Log what actual humans did with this design.
           </DialogDescription>
         </DialogHeader>
 

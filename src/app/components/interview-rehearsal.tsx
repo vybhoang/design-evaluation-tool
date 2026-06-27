@@ -6,6 +6,7 @@ import { Textarea } from "./ui/textarea";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
+import { DisclosureBanner } from "./disclosure-banner";
 import type { AudienceLens } from "./analysis-data";
 
 type Props = {
@@ -82,18 +83,10 @@ export function InterviewRehearsal({ lens }: Props) {
           </DialogTitle>
           <DialogDescription>
             A sandbox to iterate your interview script before talking to real humans.
-            Synthetic responses are <em>fiction</em> — useful for sharpening questions, not for validating anything.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-md border bg-amber-50 border-amber-200 p-2.5 flex gap-2 text-xs text-amber-900">
-          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-          <span>
-            <span className="font-medium">Not validation.</span> A general LLM isn't fine-tuned on
-            your user base and doesn't think like a person. Use this to spot leading or vague
-            questions, then run the script with real testers.
-          </span>
-        </div>
+        <DisclosureBanner id="synthetic-interview" icon={AlertTriangle} />
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
           <div>
@@ -135,7 +128,7 @@ export function InterviewRehearsal({ lens }: Props) {
               <Separator />
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <Beaker className="size-3" /> Synthetic responses (fiction · script iteration only)
+                  <Beaker className="size-3" /> Synthetic responses
                 </div>
                 <div className="space-y-3">
                   {exchanges.map((e, i) => (

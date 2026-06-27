@@ -1,6 +1,7 @@
 import type { HistoryEntry } from "./history-store";
 import type { ValidationEvidence } from "./validation-store";
 import { evidenceFor, validationStatus } from "./validation-store";
+import { isDismissed } from "./disclosure-store";
 
 const SEV_COLOR: Record<string, string> = {
   critical: "#dc2626",
@@ -110,6 +111,16 @@ export function generateSnapshot(entry: HistoryEntry, validations: ValidationEvi
     ? `<img src="${entry.thumbnail}" alt="Design screenshot" style="width:100%;max-width:480px;border-radius:6px;border:1px solid #e5e7eb;display:block;margin:0 auto 20px" />`
     : "";
 
+  const bannerHtml = isDismissed("heuristic-first-pass") ? "" : `
+    <div class="banner">
+      ⚠ <strong>Heuristic pre-screen only — not a substitute for testing with real users.</strong>
+      Findings are pattern-matched against published UX research. They represent hypotheses to investigate,
+      not confirmed problems. Validate each finding with real users before treating it as truth.
+      Confidence tiers: <strong>Deterministic</strong> (measurable rules, reliable) ·
+      <strong>Heuristic</strong> (patterns, useful but not proof) ·
+      <strong>Speculative</strong> (AI hypothesis, treat as exploratory).
+    </div>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -143,14 +154,7 @@ export function generateSnapshot(entry: HistoryEntry, validations: ValidationEvi
     ${entry.context.goal ? `<div style="font-size:12px;color:#374151;margin-top:6px;font-style:italic">"${esc(entry.context.goal)}"</div>` : ""}
   </div>
   <div class="body">
-    <div class="banner">
-      ⚠ <strong>Heuristic pre-screen only — not a substitute for testing with real users.</strong>
-      Findings are pattern-matched against published UX research. They represent hypotheses to investigate,
-      not confirmed problems. Validate each finding with real users before treating it as truth.
-      Confidence tiers: <strong>Deterministic</strong> (measurable rules, reliable) ·
-      <strong>Heuristic</strong> (patterns, useful but not proof) ·
-      <strong>Speculative</strong> (AI hypothesis, treat as exploratory).
-    </div>
+    ${bannerHtml}
 
     ${imageHtml}
 

@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import type { AnalysisContext } from "./design-canvas";
 import type { AnalysisResult } from "./analysis-data";
 
@@ -11,6 +12,8 @@ export type HistoryEntry = {
 };
 
 const KEY = "cognition.history.v1";
+const MAX_RUNS = 30;
+let warnedAboutCap = false;
 
 export function loadHistory(): HistoryEntry[] {
   try {
@@ -25,7 +28,11 @@ export function loadHistory(): HistoryEntry[] {
 export function saveHistory(entries: HistoryEntry[]) {
   try {
     // cap to most recent 30 to avoid bloating localStorage
-    const trimmed = entries.slice(0, 30);
+    const trimmed = entries.slice(0, MAX_RUNS);
+    if (entries.length > MAX_RUNS && !warnedAboutCap) {
+      warnedAboutCap = true;
+      toast.warning(`Keeping your ${MAX_RUNS} most recent runs — older ones were removed from local storage.`);
+    }
     localStorage.setItem(KEY, JSON.stringify(trimmed));
   } catch {
     // ignore quota errors

@@ -7,6 +7,7 @@ import { Toaster } from "../components/ui/sonner";
 import { Button } from "../components/ui/button";
 import { StoreProvider } from "../store";
 import { KeyboardShortcutsDialog } from "../components/keyboard-shortcuts-dialog";
+import { DisclosuresDialog } from "../components/disclosures-dialog";
 
 function ShortcutHint() {
   return (
@@ -69,6 +70,7 @@ function GlobalShortcuts() {
 }
 
 export default function Root() {
+  const [disclosuresOpen, setDisclosuresOpen] = useState(false);
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
     <StoreProvider>
@@ -109,10 +111,14 @@ export default function Root() {
               <div className="flex items-center gap-4">
                 <a href="https://www.nngroup.com/articles/ten-usability-heuristics/" target="_blank" rel="noreferrer" className="hover:text-foreground underline-offset-2 hover:underline">Nielsen heuristics</a>
                 <a href="https://www.w3.org/WAI/WCAG22/quickref/" target="_blank" rel="noreferrer" className="hover:text-foreground underline-offset-2 hover:underline">WCAG 2.2</a>
+                <button onClick={() => setDisclosuresOpen(true)} className="hover:text-foreground underline-offset-2 hover:underline">
+                  Disclaimers
+                </button>
               </div>
             </div>
           </footer>
 
+          <DisclosuresDialog open={disclosuresOpen} onOpenChange={setDisclosuresOpen} />
           <Toaster position="bottom-right" />
         </div>
       </TooltipProvider>

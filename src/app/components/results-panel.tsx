@@ -3,9 +3,10 @@ import {
   AlertTriangle, CheckCircle2, Info, XCircle, BookOpen, Brain, Users,
   ArrowRight, Download, Filter, Accessibility, Eye, ShieldAlert,
   HelpCircle, Beaker, Flag, BookCheck, CircleDashed, MinusCircle,
-  FileText, Copy, Check, ChevronDown, X,
+  FileText, Copy, Check, ChevronDown,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { DisclosureBanner } from "./disclosure-banner";
 import { InterviewRehearsal } from "./interview-rehearsal";
 import { ValidationDialog } from "./validation-dialog";
 import type { ValidationEvidence } from "./validation-store";
@@ -197,7 +198,7 @@ function FindingCard({
             </div>
           </TooltipTrigger>
           <TooltipContent side="right" className="max-w-xs">
-            Triage #{index + 1} — Severity × Confidence tier, unvalidated findings prioritised. Not a prediction of user impact.
+            Triage #{index + 1} — Severity × Confidence tier, unvalidated findings prioritised.
           </TooltipContent>
         </Tooltip>
         <span className="font-medium flex-1 min-w-0 text-sm leading-snug line-clamp-2">{f.principle}</span>
@@ -617,13 +618,6 @@ export function ResultsPanel({
   const [severityFilter, setSeverityFilter] = useState<Set<Severity>>(
     new Set(["critical", "warning", "info", "pass"])
   );
-  const [bannerDismissed, setBannerDismissed] = useState(
-    () => localStorage.getItem("cognition.honestyBannerDismissed") === "true"
-  );
-  const dismissBanner = () => {
-    localStorage.setItem("cognition.honestyBannerDismissed", "true");
-    setBannerDismissed(true);
-  };
   const [openEvidenceForId, setOpenEvidenceForId] = useState<string | null>(null);
 
   const counts = useMemo(
@@ -736,23 +730,7 @@ export function ResultsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Honesty banner */}
-      {!bannerDismissed && (
-        <div className="shrink-0 rounded-lg border bg-amber-50 border-amber-200 p-3 flex items-start gap-2.5">
-          <ShieldAlert className="size-4 text-amber-700 mt-0.5 shrink-0" />
-          <div className="text-xs text-amber-900 leading-relaxed flex-1">
-            <span className="font-medium">Heuristic first pass — not user research.</span>{" "}
-            Pattern-matched against UX principles. Validate with real users before treating anything as truth.
-          </div>
-          <button
-            onClick={dismissBanner}
-            className="text-amber-600 hover:text-amber-900 ml-1 shrink-0"
-            aria-label="Dismiss"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
-      )}
+      <DisclosureBanner id="heuristic-first-pass" icon={ShieldAlert} />
 
       <Card className="shrink-0">
         <CardContent className="p-4 space-y-3">
@@ -878,9 +856,8 @@ export function ResultsPanel({
           <div className="space-y-3">
             <div className="rounded-lg border bg-card p-3 text-xs text-muted-foreground leading-relaxed">
               <span className="font-medium text-foreground">Synthetic users for iteration, not validation.</span>{" "}
-              You can rehearse interview scripts against an archetype to spot leading questions or
-              gaps — useful prep work. But a general LLM isn't fine-tuned on your user base, so
-              the responses are fiction. <span className="font-medium text-foreground">No real users, no UX.</span>
+              Rehearse interview scripts against an archetype to spot leading questions or gaps before
+              you run them with real testers.
             </div>
             {result.lenses.map((l) => <LensCard key={l.id} l={l} />)}
             <HumanTestingPanel result={result} />

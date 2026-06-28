@@ -336,8 +336,8 @@ export function PatternsView({ history, validations }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         <Stat icon={Sparkles} label="Runs" value={totalRuns} />
         <Stat icon={Users} label="Evidence logs" value={totalEvidence} />
-        <Stat icon={CheckCircle2} label="Confirmed" value={totalConfirmed} color="text-emerald-600 dark:text-emerald-400" />
-        <Stat icon={TrendingUp} label="Patterns" value={confirmedPatterns} color="text-primary" />
+        <Stat icon={CheckCircle2} label="Confirmed logs" value={totalConfirmed} color="text-emerald-600 dark:text-emerald-400" />
+        <Stat icon={TrendingUp} label="Findings confirmed" value={confirmedPatterns} color="text-primary" />
         <Stat
           icon={AlertCircle}
           label="Need attention"
@@ -349,24 +349,28 @@ export function PatternsView({ history, validations }: Props) {
       {sortedHistory.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold mb-2">Findings per run</h2>
-          <ChartContainer config={chartConfig} className="aspect-auto h-[180px] w-full">
-            <BarChart data={chartData}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="run" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(_, payload) => payload?.[0]?.payload?.label}
+          <div className="overflow-x-auto">
+            <div style={{ minWidth: `${Math.max(chartData.length * 56, 100)}px` }}>
+              <ChartContainer config={chartConfig} className="aspect-auto h-[180px] w-full">
+                <BarChart data={chartData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="run" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(_, payload) => payload?.[0]?.payload?.label}
+                      />
+                    }
                   />
-                }
-              />
-              <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" />
-              <Bar dataKey="warning" stackId="a" fill="var(--color-warning)" />
-              <Bar dataKey="info" stackId="a" fill="var(--color-info)" />
-              <Bar dataKey="pass" stackId="a" fill="var(--color-pass)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ChartContainer>
+                  <Bar dataKey="critical" stackId="a" fill="var(--color-critical)" />
+                  <Bar dataKey="warning" stackId="a" fill="var(--color-warning)" />
+                  <Bar dataKey="info" stackId="a" fill="var(--color-info)" />
+                  <Bar dataKey="pass" stackId="a" fill="var(--color-pass)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            </div>
+          </div>
         </div>
       )}
 

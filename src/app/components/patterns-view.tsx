@@ -318,7 +318,6 @@ export function PatternsView({ history, validations }: Props) {
   const totalRuns = history.length;
   const totalEvidence = validations.length;
   const totalConfirmed = validations.filter((v) => v.verdict === "confirmed").length;
-  const confirmedPatterns = aggregates.filter((a) => a.confirmed >= 2).length;
   const needAttention = aggregates.filter(
     (a) => a.totalOccurrences >= 2 && a.confirmed + a.refuted + a.inconclusive === 0
   ).length;
@@ -327,18 +326,35 @@ export function PatternsView({ history, validations }: Props) {
     <>
       <div>
         <h1 className="font-serif text-2xl tracking-tight">Patterns</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {totalRuns} run{totalRuns === 1 ? "" : "s"} · {totalEvidence} evidence log{totalEvidence === 1 ? "" : "s"} ·{" "}
-          {totalConfirmed} confirmed · {confirmedPatterns} finding{confirmedPatterns === 1 ? "" : "s"} confirmed twice or more
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mt-1">
+          <span>
+            <span className="font-medium">{totalRuns}</span>{" "}
+            <span className="text-muted-foreground">run{totalRuns === 1 ? "" : "s"}</span>
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span>
+            <span className="font-medium">{totalEvidence}</span>{" "}
+            <span className="text-muted-foreground">evidence log{totalEvidence === 1 ? "" : "s"}</span>
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">{totalConfirmed}</span>{" "}
+            <span className="text-muted-foreground">confirmed</span>
+          </span>
+          <span className="text-muted-foreground">·</span>
+          <span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">{validatedAcrossRuns.length}</span>{" "}
+            <span className="text-muted-foreground">validated across runs</span>
+          </span>
           {needAttention > 0 && (
             <>
-              {" · "}
+              <span className="text-muted-foreground">·</span>
               <span className="font-medium text-amber-600 dark:text-amber-400">
-                {needAttention} need{needAttention === 1 ? "s" : ""} attention
+                {needAttention} need attention
               </span>
             </>
           )}
-        </p>
+        </div>
       </div>
 
       {sortedHistory.length > 0 && (

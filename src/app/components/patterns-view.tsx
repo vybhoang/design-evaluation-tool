@@ -3,8 +3,7 @@ import { useNavigate } from "react-router";
 import {
   TrendingUp, TrendingDown, Minus,
   CheckCircle2, XCircle, MinusCircle,
-  Activity, Users, Sparkles, AlertCircle,
-  Flame, ShieldCheck,
+  AlertCircle, Flame, ShieldCheck,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent } from "./ui/card";
@@ -327,23 +326,19 @@ export function PatternsView({ history, validations }: Props) {
   return (
     <>
       <div>
-        <h1 className="font-serif text-2xl tracking-tight">Patterns across runs</h1>
-        <p className="text-sm text-muted-foreground">
-          Recurring findings ranked by how often real users have confirmed them.
+        <h1 className="font-serif text-2xl tracking-tight">Patterns</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {totalRuns} run{totalRuns === 1 ? "" : "s"} · {totalEvidence} evidence log{totalEvidence === 1 ? "" : "s"} ·{" "}
+          {totalConfirmed} confirmed · {confirmedPatterns} finding{confirmedPatterns === 1 ? "" : "s"} confirmed twice or more
+          {needAttention > 0 && (
+            <>
+              {" · "}
+              <span className="font-medium text-amber-600 dark:text-amber-400">
+                {needAttention} need{needAttention === 1 ? "s" : ""} attention
+              </span>
+            </>
+          )}
         </p>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-        <Stat icon={Sparkles} label="Runs" value={totalRuns} />
-        <Stat icon={Users} label="Evidence logs" value={totalEvidence} />
-        <Stat icon={CheckCircle2} label="Confirmed logs" value={totalConfirmed} color="text-emerald-600 dark:text-emerald-400" />
-        <Stat icon={TrendingUp} label="Findings confirmed" value={confirmedPatterns} color="text-primary" />
-        <Stat
-          icon={AlertCircle}
-          label="Need attention"
-          value={needAttention}
-          color={needAttention > 0 ? "text-amber-600 dark:text-amber-400" : ""}
-        />
       </div>
 
       {sortedHistory.length > 0 && (
@@ -391,10 +386,9 @@ export function PatternsView({ history, validations }: Props) {
         {recurringFailures.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <Flame className="size-4 text-red-600" />
               <h2 className="text-sm font-semibold font-serif">Recurring failures</h2>
-              <Badge variant="outline" className="text-red-700 border-red-200 text-xs">{recurringFailures.length}</Badge>
-              <span className="text-xs text-muted-foreground">— critical or warning in ≥ 3 runs</span>
+              <Badge variant="outline" className="text-xs">{recurringFailures.length}</Badge>
+              <span className="text-xs text-muted-foreground">Critical or warning in 3+ runs</span>
             </div>
             <div className="space-y-3">
               {recurringFailures.map((a) => (
@@ -408,10 +402,9 @@ export function PatternsView({ history, validations }: Props) {
         {validatedAcrossRuns.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <ShieldCheck className="size-4 text-emerald-600" />
               <h2 className="text-sm font-semibold font-serif">Validated across runs</h2>
-              <Badge variant="outline" className="text-emerald-700 border-emerald-200 text-xs">{validatedAcrossRuns.length}</Badge>
-              <span className="text-xs text-muted-foreground">— confirmed by real users in ≥ 2 separate sessions</span>
+              <Badge variant="outline" className="text-xs">{validatedAcrossRuns.length}</Badge>
+              <span className="text-xs text-muted-foreground">Confirmed in 2+ separate sessions</span>
             </div>
             <div className="space-y-3">
               {validatedAcrossRuns.map((a) => (
@@ -425,7 +418,6 @@ export function PatternsView({ history, validations }: Props) {
         <section>
           {(recurringFailures.length > 0 || validatedAcrossRuns.length > 0) && (
             <div className="flex items-center gap-2 mb-3">
-              <Activity className="size-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold font-serif">All findings</h2>
               <Badge variant="outline" className="text-xs">{aggregates.length}</Badge>
             </div>
@@ -461,16 +453,3 @@ function TrendIndicator({ trend }: { trend: Trend }) {
   );
 }
 
-function Stat({ icon: Icon, label, value, color = "" }: { icon: React.ElementType; label: string; value: number; color?: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="size-8 rounded-md bg-muted flex items-center justify-center">
-        <Icon className={`size-4 ${color || "text-muted-foreground"}`} />
-      </div>
-      <div>
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div style={{ fontSize: "1.125rem", fontWeight: 600 }} className={color}>{value}</div>
-      </div>
-    </div>
-  );
-}

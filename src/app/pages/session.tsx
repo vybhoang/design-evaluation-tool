@@ -147,6 +147,7 @@ export default function SessionPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 lg:items-start">
         <div className="space-y-4">
+          <div data-tour="session-capture">
           <SessionCapture
             findings={entry.result.findings}
             onAddEvidence={addEvidence}
@@ -155,6 +156,7 @@ export default function SessionPage() {
             analysisLabel={entry.label}
             suggestedQuestions={suggestedQuestions}
           />
+          </div>
           {decksForAnalysis.length > 0 && (
             <>
               {decksForAnalysis.length > 1 && (

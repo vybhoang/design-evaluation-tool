@@ -175,7 +175,7 @@ export function DesignCanvas({
       {viewerSlot ? (
         viewerSlot
       ) : (
-        <Card className="relative flex-1 overflow-hidden border-dashed bg-muted/30 min-h-[420px]">
+        <Card data-tour="upload-area" className="relative flex-1 overflow-hidden border-dashed bg-muted/30 min-h-[420px]">
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -222,7 +222,7 @@ export function DesignCanvas({
         </Card>
       )}
 
-      <Card className="p-4 space-y-4">
+      <Card data-tour="context-fields" className="p-4 space-y-4">
         <div>
           <p className="text-sm font-medium">Analysis context</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -281,7 +281,7 @@ export function DesignCanvas({
         </div>
       </Card>
 
-      <div className="flex flex-col gap-2">
+      <div data-tour="analyze-btn" className="flex flex-col gap-2">
         <Button
           size="lg"
           className="gap-2"

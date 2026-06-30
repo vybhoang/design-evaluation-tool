@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { StoreProvider } from "../store";
 import { KeyboardShortcutsDialog } from "../components/keyboard-shortcuts-dialog";
 import { DisclosuresDialog } from "../components/disclosures-dialog";
+import { TourProvider, TourHelpButton } from "../components/tour-overlay";
 
 function ShortcutHint() {
   return (
@@ -74,6 +75,7 @@ export default function Root() {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
     <StoreProvider>
+      <TourProvider>
       <TooltipProvider delayDuration={300}>
         <GlobalShortcuts />
         <div className="min-h-screen w-full bg-background flex flex-col">
@@ -88,10 +90,11 @@ export default function Root() {
               <nav className="flex items-center gap-1 overflow-x-auto max-w-full -mx-1 px-1">
                 <NavLink to="/new" className={navClass}>New</NavLink>
                 <NavLink to="/history" className={navClass}>Runs</NavLink>
-                <NavLink to="/patterns" className={navClass}>Patterns</NavLink>
-                <NavLink to="/responses" className={navClass}>Responses</NavLink>
+                <NavLink to="/patterns" data-tour="nav-patterns" className={navClass}>Patterns</NavLink>
+                <NavLink to="/responses" data-tour="nav-responses" className={navClass}>Responses</NavLink>
                 <NavLink to="/compare" className={navClass}>Compare</NavLink>
                 <ShortcutHint />
+                <TourHelpButton />
                 <ThemeToggle />
               </nav>
             </div>
@@ -122,6 +125,7 @@ export default function Root() {
           <Toaster position="bottom-right" />
         </div>
       </TooltipProvider>
+      </TourProvider>
     </StoreProvider>
     </ThemeProvider>
   );

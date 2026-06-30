@@ -7,6 +7,7 @@ import { WorkflowStepper } from "../components/workflow-stepper";
 import { Button } from "../components/ui/button";
 import { useStore } from "../store";
 import { downloadSnapshot } from "../components/snapshot-export";
+import { TourAnchor } from "../components/tour-overlay";
 
 export default function AnalysisPage() {
   const { id } = useParams();
@@ -58,11 +59,13 @@ export default function AnalysisPage() {
               <BarChart3 className="size-4" /> Instruments
             </Link>
           </Button>
-          <Button asChild size="sm" className="gap-1.5">
-            <Link to={`/analysis/${entry.id}/session`}>
-              <Radio className="size-4" /> Moderate session
-            </Link>
-          </Button>
+          <TourAnchor id="moderate-session-btn">
+            <Button asChild size="sm" className="gap-1.5">
+              <Link to={`/analysis/${entry.id}/session`}>
+                <Radio className="size-4" /> Moderate session
+              </Link>
+            </Button>
+          </TourAnchor>
         </div>
       </div>
 
@@ -85,6 +88,7 @@ export default function AnalysisPage() {
             onClear={() => navigate("/new")}
           />
         </div>
+        <div data-tour="results-panel">
         <ResultsPanel
           result={entry.result}
           activeFindingId={activeFindingId}
@@ -95,6 +99,7 @@ export default function AnalysisPage() {
           context={entry.context}
           label={entry.label}
         />
+        </div>
       </div>
 
     </>

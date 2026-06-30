@@ -6,7 +6,9 @@ import { generateAnalysis } from "./analysis-data";
 // by api/anthropic/[...path].ts (Vercel) or the vite.config.ts dev proxy. This
 // flag is just a non-secret switch for whether to attempt the live call at all.
 export function isLiveAnalysisEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_LIVE_ANALYSIS === "true";
+  const val = import.meta.env.VITE_ENABLE_LIVE_ANALYSIS;
+  console.log("[cognition] VITE_ENABLE_LIVE_ANALYSIS =", JSON.stringify(val), "| live:", val === "true");
+  return val === "true";
 }
 
 async function imageToBase64(url: string): Promise<{

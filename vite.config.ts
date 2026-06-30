@@ -30,6 +30,14 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
     ],
+    // Explicitly inline VITE_* vars so they survive the Vercel build pipeline
+    // regardless of whether they come from .env files or process.env.
+    define: {
+      'import.meta.env.VITE_ENABLE_LIVE_ANALYSIS': JSON.stringify(
+        env.VITE_ENABLE_LIVE_ANALYSIS ?? ''
+      ),
+    },
+
     resolve: {
       alias: {
         // Alias @ to the src directory

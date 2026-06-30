@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router";
 import { ThemeProvider, useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 import { TooltipProvider } from "../components/ui/tooltip";
@@ -20,6 +20,12 @@ function ShortcutHint() {
       ?
     </button>
   );
+}
+
+function NavTourButton() {
+  const { pathname } = useLocation();
+  if (pathname === "/") return null;
+  return <TourHelpButton />;
 }
 
 function ThemeToggle() {
@@ -94,7 +100,7 @@ export default function Root() {
                 <NavLink to="/responses" data-tour="nav-responses" className={navClass}>Responses</NavLink>
                 <NavLink to="/compare" className={navClass}>Compare</NavLink>
                 <ShortcutHint />
-                <TourHelpButton />
+                <NavTourButton />
                 <ThemeToggle />
               </nav>
             </div>

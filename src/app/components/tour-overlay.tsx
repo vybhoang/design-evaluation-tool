@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { X, ChevronLeft, ChevronRight, GraduationCap } from "lucide-react";
 import { Button } from "./ui/button";
 import { TOUR_STEPS, type TourStep } from "./tour-config";
@@ -66,6 +66,7 @@ export function TourAnchor({
 
 export function TourProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { history } = useStore();
   const analysisId = history[0]?.id ?? null;
 
@@ -118,12 +119,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setStepIdx(prevIdx);
   }, [stepIdx, navigateForStep]);
 
-  // Auto-launch once for new visitors
+  // Auto-launch once for new visitors, but only when they reach /new (not on landing)
   useEffect(() => {
+    if (location.pathname !== "/new") return;
     if (localStorage.getItem(STORAGE_KEY)) return;
-    const t = setTimeout(start, 900);
+    const t = setTimeout(() => { setStepIdx(0); setActive(true); }, 900);
     return () => clearTimeout(t);
-  }, [start]);
+  }, [location.pathname]);
 
   return (
     <TourContext.Provider value={{ active, start, registerAnchor }}>

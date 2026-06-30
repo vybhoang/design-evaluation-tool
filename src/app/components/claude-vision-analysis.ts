@@ -39,6 +39,7 @@ export async function suggestGoalsFromImage(context: AnalysisContext): Promise<s
   const image = await imageToBase64(context.imageUrl);
   const response = await fetch("/api/anthropic/v1/messages", {
     method: "POST",
+    cache: "no-store",
     headers: {
       "content-type": "application/json",
     },
@@ -158,6 +159,7 @@ export async function analyzeWithClaude(
     onStage?.("Analyzing design against UX research…");
     const response = await fetch("/api/anthropic/v1/messages", {
       method: "POST",
+      cache: "no-store",
       headers: {
         "content-type": "application/json",
       },

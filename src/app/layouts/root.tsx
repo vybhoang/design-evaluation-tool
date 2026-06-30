@@ -73,7 +73,7 @@ function GlobalShortcuts() {
 export default function Root() {
   const [disclosuresOpen, setDisclosuresOpen] = useState(false);
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light">
     <StoreProvider>
       <TourProvider>
       <TooltipProvider delayDuration={300}>

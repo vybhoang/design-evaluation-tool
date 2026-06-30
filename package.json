@@ -82,6 +82,7 @@
       "optional": true
     }
   },
+  "packageManager": "pnpm@9.15.0",
   "pnpm": {
     "overrides": {
       "vite": "6.3.5"

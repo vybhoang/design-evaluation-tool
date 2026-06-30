@@ -18,6 +18,16 @@ export type ResearchFinding = {
 
 export type HeatPoint = { x: number; y: number; intensity: number };
 
+// Praise, not a finding — no citation required, no severity tier. Only
+// surfaced for genuinely strong or creative choices; an empty array is the
+// honest result for a design that doesn't earn any.
+export type Kudos = {
+  id: string;
+  title: string;
+  observation: string;
+  region?: { x: number; y: number; w: number; h: number };
+};
+
 export type CognitivePrinciple = {
   id: string;
   name: string;
@@ -48,6 +58,7 @@ export type AnalysisResult = {
   principles: CognitivePrinciple[];
   lenses: AudienceLens[];
   heatmap: HeatPoint[];
+  kudos: Kudos[];
 };
 
 export function generateAnalysis(designType: string, audience: string): AnalysisResult {
@@ -292,6 +303,37 @@ export function generateAnalysis(designType: string, audience: string): Analysis
 
   const baseClarity = designType === "checkout" ? 62 : designType === "dashboard" ? 70 : 67;
   const audAdj = audience === "seniors" ? -6 : 0;
+  const clarityScore = Math.max(30, Math.min(95, baseClarity + audAdj));
+  const accessibilityScore = audience === "seniors" ? 52 : 74;
+
+  const kudosPool: Kudos[] = [
+    {
+      id: "k1",
+      title: "Confident, consistent type scale",
+      observation: "Heading and body sizes step down in a clear, predictable ratio — easy to scan without a style guide in hand.",
+      region: { x: 0.05, y: 0.04, w: 0.5, h: 0.1 },
+    },
+    {
+      id: "k2",
+      title: "Restrained color palette",
+      observation: "A single accent color is reserved for actionable elements, which keeps it legible as a signal rather than decoration.",
+    },
+    {
+      id: "k3",
+      title: "Generous, consistent spacing rhythm",
+      observation: "Section and element spacing follows a repeating unit, giving the page a calm, structured feel rather than a cramped one.",
+    },
+    {
+      id: "k4",
+      title: "Clear single primary action per screen",
+      observation: "There's no competition for attention at the decision point — the one thing you're meant to do is the most visually dominant thing.",
+      region: { x: 0.4, y: 0.78, w: 0.2, h: 0.08 },
+    },
+  ];
+
+  // Kudos are earned, not guaranteed — a design with real problems gets none.
+  const avgScore = (clarityScore + accessibilityScore) / 2;
+  const kudos: Kudos[] = avgScore >= 65 ? kudosPool.slice(0, avgScore >= 80 ? 4 : avgScore >= 72 ? 3 : 2) : [];
 
   const heatmap: HeatPoint[] = [
     { x: 0.5, y: 0.22, intensity: 1.0 },
@@ -305,11 +347,12 @@ export function generateAnalysis(designType: string, audience: string): Analysis
   ];
 
   return {
-    clarityScore: Math.max(30, Math.min(95, baseClarity + audAdj)),
-    accessibilityScore: audience === "seniors" ? 52 : 74,
+    clarityScore,
+    accessibilityScore,
     findings,
     principles,
     lenses,
     heatmap,
+    kudos,
   };
 }

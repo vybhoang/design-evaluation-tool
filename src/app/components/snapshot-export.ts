@@ -94,6 +94,17 @@ export function generateSnapshot(entry: HistoryEntry, validations: ValidationEvi
       </div>`;
   }).join("\n");
 
+  const kudosHtml = entry.result.kudos.length
+    ? `<div class="section-title" style="margin-top:24px">Kudos — what's working well</div>
+      <div style="border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:14px">
+        ${entry.result.kudos.map((k) => `
+          <div style="margin-bottom:10px">
+            <div style="font-weight:600;font-size:13px;color:#92400e">${esc(k.title)}</div>
+            <div style="font-size:12px;color:#78716c;margin-top:2px">${esc(k.observation)}</div>
+          </div>`).join("\n")}
+      </div>`
+    : "";
+
   const principlesHtml = entry.result.principles.map((p) => {
     const color = SEV_COLOR[p.status] ?? "#888";
     return `
@@ -167,7 +178,9 @@ export function generateSnapshot(entry: HistoryEntry, validations: ValidationEvi
       <div class="stat"><div class="stat-num">${entry.result.accessibilityScore}</div><div class="stat-label">Accessibility score</div></div>
     </div>
 
-    <div class="section-title">Heuristic findings (${findings.length})</div>
+    ${kudosHtml}
+
+    <div class="section-title" style="margin-top:24px">Heuristic findings (${findings.length})</div>
     ${findingsHtml}
 
     <div class="section-title" style="margin-top:24px">Cognitive principles (${entry.result.principles.length})</div>

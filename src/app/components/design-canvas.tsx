@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, type ReactNode } from "react";
-import { Upload, Sparkles, Loader2 } from "lucide-react";
+import { Upload, Sparkles, Loader2, Clock } from "lucide-react";
 import { isLiveAnalysisEnabled, suggestGoalsFromImage } from "./claude-vision-analysis";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -89,6 +89,16 @@ const GOAL_SUGGESTIONS: Record<string, string[]> = {
   ],
 };
 
+// Live calls round-trip a screenshot through Claude Vision — variable but usually
+// in this range. The mock stage simulation is fixed-length, so its estimate is exact.
+const LIVE_ESTIMATE = "15–30s";
+const MOCK_ESTIMATE = "~3s";
+
+function formatElapsed(seconds: number) {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 type Props = {
   context: AnalysisContext;
   setContext: (c: AnalysisContext) => void;
@@ -113,6 +123,16 @@ export function DesignCanvas({
   const [aiGoals, setAiGoals] = useState<string[] | null>(null);
   const [loadingGoals, setLoadingGoals] = useState(false);
   const [imageReplaced, setImageReplaced] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setElapsed(0);
+      return;
+    }
+    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(id);
+  }, [isAnalyzing]);
 
   const handleFile = (file: File) => {
     const url = URL.createObjectURL(file);
@@ -238,11 +258,6 @@ export function DesignCanvas({
             Tailors the heuristic checks to your design type and audience
           </p>
         </div>
-        {!context.imageUrl && (
-          <p className="text-xs text-muted-foreground text-center py-1">
-            Upload an image to unlock context
-          </p>
-        )}
         <fieldset disabled={!context.imageUrl} className="contents">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -333,14 +348,20 @@ export function DesignCanvas({
 
       <div data-tour="analyze-btn" className="flex flex-col gap-2">
         {isAnalyzing ? (
-          <div className="flex gap-2">
-            <Button size="lg" className="gap-2 flex-1" disabled>
-              <Loader2 className="size-4 animate-spin" />
-              {analyzingStage || "Analyzing against UX research…"}
-            </Button>
-            <Button size="lg" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex gap-2">
+              <Button size="lg" className="gap-2 flex-1" disabled>
+                <Loader2 className="size-4 animate-spin" />
+                {analyzingStage || "Analyzing against UX research…"}
+              </Button>
+              <Button size="lg" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+              <Clock className="size-3" />
+              {formatElapsed(elapsed)} elapsed · usually takes {isLiveAnalysisEnabled() ? LIVE_ESTIMATE : MOCK_ESTIMATE}
+            </p>
           </div>
         ) : (
           <Button
@@ -352,11 +373,7 @@ export function DesignCanvas({
             <Sparkles className="size-4" /> Run analysis
           </Button>
         )}
-        {!context.imageUrl && !isAnalyzing && (
-          <p className="text-xs text-center text-muted-foreground">
-            Upload a design above to get started
-          </p>
-        )}
+
       </div>
     </div>
   );

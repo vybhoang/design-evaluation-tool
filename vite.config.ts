@@ -54,6 +54,7 @@ export default defineConfig(({ mode }) => {
               // and set the header it requires for any request that does carry Origin.
               proxyReq.removeHeader('origin');
               proxyReq.setHeader('anthropic-dangerous-direct-browser-access', 'true');
+              proxyReq.setHeader('anthropic-version', '2023-06-01');
               if (env.ANTHROPIC_API_KEY) {
                 proxyReq.setHeader('x-api-key', env.ANTHROPIC_API_KEY);
               }

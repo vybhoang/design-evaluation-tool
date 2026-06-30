@@ -3,7 +3,7 @@ import {
   AlertTriangle, CheckCircle2, Info, XCircle, BookOpen, Brain, Users,
   ArrowRight, Download, Filter, Accessibility, Eye, ShieldAlert,
   HelpCircle, Beaker, Flag, BookCheck, CircleDashed, MinusCircle,
-  FileText, Copy, Check, ChevronDown,
+  FileText, Copy, Check, ChevronDown, Award, Sparkles,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { DisclosureBanner } from "./disclosure-banner";
@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { HumanTestingPanel } from "./human-testing";
 import type {
   AnalysisResult, Severity, ResearchFinding, CognitivePrinciple,
-  AudienceLens, Confidence,
+  AudienceLens, Confidence, Kudos,
 } from "./analysis-data";
 
 function triageScore(f: ResearchFinding, validations: ValidationEvidence[]): number {
@@ -261,6 +261,28 @@ function FindingCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function KudosSection({ kudos }: { kudos: Kudos[] }) {
+  if (kudos.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-2.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+        <Award className="size-3.5" /> Kudos — what's working well
+      </div>
+      <div className="space-y-2.5">
+        {kudos.map((k) => (
+          <div key={k.id} className="flex items-start gap-2 text-sm">
+            <Sparkles className="size-3.5 mt-0.5 text-amber-600 shrink-0" />
+            <div className="min-w-0">
+              <span className="font-medium">{k.title}</span>
+              <p className="text-muted-foreground text-xs mt-0.5">{k.observation}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -687,6 +709,13 @@ export function ResultsPanel({
     lines.push(`> This report is a first-pass AI heuristic eval. It is not a substitute for testing with real users.\n`);
     lines.push(`Clarity (heuristic): ${result.clarityScore}/100`);
     lines.push(`Accessibility (rule-based): ${result.accessibilityScore}/100\n`);
+    if (result.kudos.length > 0) {
+      lines.push(`## Kudos — what's working well`);
+      result.kudos.forEach((k) => {
+        lines.push(`- **${k.title}**: ${k.observation}`);
+      });
+      lines.push(``);
+    }
     lines.push(`## Findings (${result.findings.length})`);
     result.findings.forEach((f, i) => {
       const status = validationStatus(validations, f.id);
@@ -764,6 +793,11 @@ export function ResultsPanel({
             <div className="flex items-center gap-1.5">
               <AlertTriangle className="size-3.5 text-muted-foreground" /> {counts.warning || 0} warnings
             </div>
+            {result.kudos.length > 0 && (
+              <div className="flex items-center gap-1.5 text-amber-600">
+                <Award className="size-3.5" /> {result.kudos.length} kudos
+              </div>
+            )}
             <div className="flex-1 min-w-[160px] flex items-center gap-2">
               <BookCheck className="size-3.5 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
@@ -799,6 +833,7 @@ export function ResultsPanel({
         </TabsList>
 
         <TabsContent value="research" className="mt-3 flex flex-col gap-2">
+          <KudosSection kudos={result.kudos} />
           <div className="flex items-center gap-1.5 flex-wrap text-xs">
             <Filter className="size-3.5 text-muted-foreground" />
             {(["critical", "warning", "info", "pass"] as Severity[]).map((s) => {
@@ -850,11 +885,6 @@ export function ResultsPanel({
 
         <TabsContent value="humans" className="mt-3">
           <div className="space-y-3">
-            <div className="rounded-lg border bg-card p-3 text-xs text-muted-foreground leading-relaxed">
-              <span className="font-medium text-foreground">Synthetic users for iteration, not validation.</span>{" "}
-              Rehearse interview scripts against an archetype to spot leading questions or gaps before
-              you run them with real testers.
-            </div>
             {result.lenses.map((l) => <LensCard key={l.id} l={l} />)}
             <HumanTestingPanel result={result} />
           </div>

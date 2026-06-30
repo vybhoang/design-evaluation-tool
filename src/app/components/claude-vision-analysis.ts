@@ -1,5 +1,5 @@
 import type { AnalysisContext } from "./design-canvas";
-import type { AnalysisResult, ResearchFinding, CognitivePrinciple } from "./analysis-data";
+import type { AnalysisResult, ResearchFinding, CognitivePrinciple, Kudos } from "./analysis-data";
 import { generateAnalysis } from "./analysis-data";
 
 // The Anthropic key itself never reaches the client — it's injected server-side
@@ -111,7 +111,14 @@ Return ONLY a valid JSON object — no markdown fences, no preamble, no explanat
     }
   ],
   "clarityScore": 72,
-  "accessibilityScore": 65
+  "accessibilityScore": 65,
+  "kudos": [
+    {
+      "title": "Short praise headline (e.g. 'Confident, on-brand typography')",
+      "observation": "What specifically you see that earns this — be concrete about the element, not generic flattery.",
+      "region": { "x": 0.0, "y": 0.0, "w": 1.0, "h": 0.15 }
+    }
+  ]
 }
 
 RULES — follow these exactly:
@@ -121,7 +128,8 @@ RULES — follow these exactly:
 4. Regions are 0.0–1.0 normalized coordinates from the top-left corner. Estimate carefully based on where the element appears in the image.
 5. Return 6–10 findings and 6–10 principles covering different areas of the design.
 6. Scores are 0–100. Calibrate them: 50–65 = noticeable issues, 66–80 = professional quality with some gaps, 81–95 = strong design. Do not default to 50 or 100.
-7. severity "pass" is valid — use it for things the design does well, not only for problems.`;
+7. severity "pass" is valid — use it for things the design does well, not only for problems.
+8. "kudos" is genuine praise, separate from findings — no citation required. Only include an item for something specifically well-executed or creative (typography, color, layout, copy voice, micro-interaction intent, composition). Region is optional — omit it if the praise isn't tied to one spot. If this design has critical or warning findings that outweigh its strengths, or nothing genuinely stands out, return an empty array. Do not pad this list to hit a quota — 0 is a valid and common answer.`;
 }
 
 function clamp(v: unknown, min = 0, max = 1): number {
@@ -218,6 +226,19 @@ export async function analyzeWithClaude(
       impact: String(p.impact ?? ""),
     }));
 
+    // An empty kudos array is a meaningful result (the design didn't earn any praise),
+    // so unlike findings/principles it never falls back to the mock generator.
+    const kudos: Kudos[] = (parsed.kudos ?? [])
+      .map((k: any, i: number) => ({
+        id: `kv-${Date.now()}-${i}`,
+        title: String(k.title ?? `Highlight ${i + 1}`),
+        observation: String(k.observation ?? ""),
+        region: k.region
+          ? { x: clamp(k.region.x), y: clamp(k.region.y), w: clamp(k.region.w, 0.05), h: clamp(k.region.h, 0.03) }
+          : undefined,
+      }))
+      .filter((k: Kudos) => k.observation.trim().length > 0);
+
     // Lenses and heatmap stay as context-based mock — they're audience archetypes, not image-derived
     const mock = generateAnalysis(context.designType, context.audience);
 
@@ -228,6 +249,7 @@ export async function analyzeWithClaude(
       principles: principles.length > 0 ? principles : mock.principles,
       lenses: mock.lenses,
       heatmap: mock.heatmap,
+      kudos,
     };
   } catch (err) {
     throw err;

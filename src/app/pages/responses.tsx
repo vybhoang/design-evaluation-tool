@@ -1,8 +1,15 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
-  Search, Trash2, CheckCircle2, XCircle, MinusCircle, Tag, Hash, Plus, ListChecks, BarChart3, Quote, Download,
+  Search, Trash2, CheckCircle2, XCircle, MinusCircle, Tag, Hash, Plus, ListChecks, BarChart3, Quote, Download, BookCheck,
 } from "lucide-react";
+
+const verdictIcons = { confirmed: CheckCircle2, refuted: XCircle, inconclusive: MinusCircle } as const;
+
+function VerdictLabel({ verdict }: { verdict: "confirmed" | "refuted" | "inconclusive" }) {
+  const Icon = verdictIcons[verdict];
+  return <span className="inline-flex items-center gap-1 font-medium"><Icon className="size-3" /> {verdict}</span>;
+}
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent } from "../components/ui/card";
@@ -16,19 +23,20 @@ import type { InterviewResponse } from "../components/response-store";
 import type { Code } from "../components/codebook-store";
 import { CodingView } from "../components/coding-view";
 import { QuoteBank } from "../components/quote-bank";
+import { EvidenceView } from "../components/evidence-view";
 import { downloadResponsesCsv } from "../components/csv-export";
-
-const verdictMeta = {
-  confirmed: { icon: CheckCircle2, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-  refuted: { icon: XCircle, color: "text-red-700 bg-red-50 border-red-200" },
-  inconclusive: { icon: MinusCircle, color: "text-amber-700 bg-amber-50 border-amber-200" },
-} as const;
 
 type TaggedFilter = "all" | "tagged" | "untagged";
 
 export default function ResponsesPage() {
   const navigate = useNavigate();
-  const { responses, deleteResponse, clearResponses, codebook, addCode, toggleResponseCode, updateResponse } = useStore();
+  const {
+    responses, deleteResponse, clearResponses, codebook, addCode, toggleResponseCode, updateResponse,
+    validations, deleteEvidence, history,
+  } = useStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") ?? "log";
+  const principleParam = searchParams.get("principle") ?? undefined;
 
   const [query, setQuery] = useState("");
   const [tagged, setTagged] = useState<TaggedFilter>("all");
@@ -117,8 +125,12 @@ export default function ResponsesPage() {
         </div>
       )}
 
-      <Tabs defaultValue="log" className="flex flex-col">
-        <TabsList className="shrink-0 grid grid-cols-3 w-full max-w-md">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setSearchParams(v === "log" ? {} : { tab: v }, { replace: true })}
+        className="flex flex-col"
+      >
+        <TabsList className="shrink-0 grid grid-cols-4 w-full max-w-lg">
           <TabsTrigger value="log" className="gap-1.5">
             <ListChecks className="size-4" /> Log
           </TabsTrigger>
@@ -127,6 +139,9 @@ export default function ResponsesPage() {
           </TabsTrigger>
           <TabsTrigger value="quotes" className="gap-1.5">
             <Quote className="size-4" /> Quote bank
+          </TabsTrigger>
+          <TabsTrigger value="evidence" className="gap-1.5">
+            <BookCheck className="size-4" /> Evidence
           </TabsTrigger>
         </TabsList>
 
@@ -189,6 +204,15 @@ export default function ResponsesPage() {
               const r = responses.find((x) => x.id === id);
               updateResponse(id, { starred: !r?.starred });
             }}
+          />
+        </TabsContent>
+
+        <TabsContent value="evidence" className="mt-3">
+          <EvidenceView
+            validations={validations}
+            history={history}
+            onDelete={deleteEvidence}
+            initialPrinciple={principleParam}
           />
         </TabsContent>
       </Tabs>
@@ -284,12 +308,7 @@ function ResponseRow({
                 <Tag className="size-3" /> {r.findingPrinciple}
               </Badge>
             )}
-            {r.verdict && (
-              <Badge variant="outline" className={`gap-1 ${verdictMeta[r.verdict].color}`}>
-                {(() => { const Icon = verdictMeta[r.verdict].icon; return <Icon className="size-3" />; })()}
-                {r.verdict}
-              </Badge>
-            )}
+            {r.verdict && <VerdictLabel verdict={r.verdict} />}
             {appliedCodes.map((c) => (
               <Badge key={c.id} variant="secondary" className="gap-1">
                 <Hash className="size-3" /> {c.label}

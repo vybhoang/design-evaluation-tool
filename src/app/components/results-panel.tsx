@@ -30,38 +30,35 @@ function triageScore(f: ResearchFinding, validations: ValidationEvidence[]): num
   return sev * conf * bonus;
 }
 
-const severityMeta: Record<Severity, { icon: any; color: string; bg: string; label: string }> = {
-  critical: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Critical" },
-  warning: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "Warning" },
-  info: { icon: Info, color: "text-blue-600", bg: "bg-blue-50 border-blue-200", label: "Insight" },
-  pass: { icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Pass" },
+export const severityMeta: Record<Severity, { icon: any; label: string }> = {
+  critical: { icon: XCircle, label: "Critical" },
+  warning: { icon: AlertTriangle, label: "Warning" },
+  info: { icon: Info, label: "Insight" },
+  pass: { icon: CheckCircle2, label: "Pass" },
 };
 
-const confidenceMeta: Record<Confidence, { label: string; color: string; explain: string }> = {
+const confidenceMeta: Record<Confidence, { label: string; explain: string }> = {
   high: {
     label: "Deterministic",
-    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
     explain: "Measurable rule (e.g. WCAG contrast, touch target size). Reliable.",
   },
   medium: {
     label: "Heuristic",
-    color: "bg-amber-50 text-amber-700 border-amber-200",
     explain: "Pattern-matching against established UX principles. Useful but not proof.",
   },
   low: {
     label: "Speculative",
-    color: "bg-muted text-muted-foreground border-border",
     explain: "AI can't actually verify this. Treat as a hypothesis to test with real users.",
   },
 };
 
-function SeverityBadge({ severity }: { severity: Severity }) {
+export function SeverityBadge({ severity }: { severity: Severity }) {
   const m = severityMeta[severity];
   const Icon = m.icon;
   return (
-    <Badge variant="outline" className={`gap-1 ${m.color} ${m.bg}`}>
+    <span className="inline-flex items-center gap-1 text-xs font-medium">
       <Icon className="size-3" /> {m.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -70,9 +67,9 @@ function ConfidenceBadge({ confidence }: { confidence: Confidence }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant="outline" className={`gap-1 cursor-help ${m.color}`}>
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help">
           <Beaker className="size-3" /> {m.label}
-        </Badge>
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">{m.explain}</TooltipContent>
     </Tooltip>
@@ -148,19 +145,19 @@ function MiniScore({ icon: Icon, label, value, tip }: { icon: any; label: string
 }
 
 const statusMeta = {
-  unvalidated: { icon: CircleDashed, color: "text-muted-foreground", bg: "bg-muted/50 border-border", label: "Unvalidated" },
-  confirmed: { icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", label: "Confirmed by users" },
-  refuted: { icon: XCircle, color: "text-red-700", bg: "bg-red-50 border-red-200", label: "Refuted by users" },
-  mixed: { icon: MinusCircle, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", label: "Mixed evidence" },
+  unvalidated: { icon: CircleDashed, label: "Unvalidated" },
+  confirmed: { icon: CheckCircle2, label: "Confirmed by users" },
+  refuted: { icon: XCircle, label: "Refuted by users" },
+  mixed: { icon: MinusCircle, label: "Mixed evidence" },
 } as const;
 
 function ValidationBadge({ status }: { status: keyof typeof statusMeta }) {
   const m = statusMeta[status];
   const Icon = m.icon;
   return (
-    <Badge variant="outline" className={`gap-1 ${m.color} ${m.bg}`}>
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
       <Icon className="size-3" /> {m.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -178,12 +175,11 @@ function FindingCard({
   openEvidence?: true;
   onCloseEvidence?: () => void;
 }) {
-  const m = severityMeta[f.severity];
   const status = validationStatus(validations, f.id);
   const ev = evidenceFor(validations, f.id);
   return (
     <div
-      className={`rounded-lg border transition-all ${m.bg} ${
+      className={`rounded-lg border bg-card transition-all ${
         active ? "ring-2 ring-primary shadow-md" : "hover:shadow-sm"
       }`}
     >
@@ -192,7 +188,7 @@ function FindingCard({
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              className={`size-5 rounded-full ${m.color.replace("text-", "bg-").replace("-600", "-500")} text-white flex items-center justify-center shrink-0 text-[10px] font-semibold cursor-help`}
+              className="size-5 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 text-[10px] font-semibold cursor-help"
             >
               {index + 1}
             </div>
@@ -220,7 +216,7 @@ function FindingCard({
           </div>
           <p className="text-sm">{f.observation}</p>
           {f.rule && (
-            <div className="rounded-md border bg-white/60 p-2 grid grid-cols-3 gap-2 text-xs">
+            <div className="rounded-md border bg-muted/50 p-2 grid grid-cols-3 gap-2 text-xs">
               <div>
                 <div className="text-muted-foreground text-[10px] uppercase tracking-wide">Check</div>
                 <div className="font-mono">{f.rule.check}</div>
@@ -274,8 +270,8 @@ function PrincipleRow({ p }: { p: CognitivePrinciple }) {
   const Icon = m.icon;
   return (
     <div className="flex items-start gap-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
-      <div className={`size-8 rounded-md ${m.bg} flex items-center justify-center shrink-0`}>
-        <Icon className={`size-4 ${m.color}`} />
+      <div className="size-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+        <Icon className="size-4 text-foreground" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -763,10 +759,10 @@ export function ResultsPanel({
 
           <div className="flex items-center gap-4 flex-wrap text-sm">
             <div className="flex items-center gap-1.5">
-              <XCircle className="size-3.5 text-red-500" /> {counts.critical || 0} critical
+              <XCircle className="size-3.5 text-muted-foreground" /> {counts.critical || 0} critical
             </div>
             <div className="flex items-center gap-1.5">
-              <AlertTriangle className="size-3.5 text-amber-500" /> {counts.warning || 0} warnings
+              <AlertTriangle className="size-3.5 text-muted-foreground" /> {counts.warning || 0} warnings
             </div>
             <div className="flex-1 min-w-[160px] flex items-center gap-2">
               <BookCheck className="size-3.5 text-muted-foreground shrink-0" />
@@ -813,7 +809,7 @@ export function ResultsPanel({
                   key={s}
                   onClick={() => toggleSev(s)}
                   className={`px-2 py-1 rounded-full border transition-all ${
-                    on ? `${m.bg} ${m.color}` : "bg-muted/50 text-muted-foreground border-transparent opacity-60"
+                    on ? "bg-foreground text-background border-transparent" : "bg-muted/50 text-muted-foreground border-transparent opacity-60"
                   }`}
                 >
                   {m.label} · {counts[s] || 0}

@@ -7,11 +7,9 @@ import {
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent } from "./ui/card";
-import { Badge } from "./ui/badge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "./ui/chart";
 import type { HistoryEntry } from "./history-store";
 import type { ValidationEvidence } from "./validation-store";
-import { formatRelative } from "./history-store";
 import type { Severity } from "./analysis-data";
 
 type Props = {
@@ -36,7 +34,6 @@ type Aggregate = {
   confirmed: number;
   refuted: number;
   inconclusive: number;
-  recentNotes: { note: string; verdict: string; runLabel: string; createdAt: number; sampleSize?: number }[];
   runIndices: number[];
   runData: RunPoint[];
   criticalOrWarningRuns: number;
@@ -90,57 +87,53 @@ function MiniTimeline({ runData, totalRuns, runLabels }: { runData: RunPoint[]; 
 }
 
 function AggCard({ a, totalRuns, runLabels, variant = "normal" }: { a: Aggregate; totalRuns: number; runLabels: string[]; variant?: "failure" | "validated" | "normal" }) {
+  const navigate = useNavigate();
   const totalEv = a.confirmed + a.refuted + a.inconclusive;
   const trend = computeTrend(a.runIndices, totalRuns);
 
-  const borderClass =
-    variant === "failure"  ? "border-l-4 border-l-red-500 dark:border-l-red-600" :
-    variant === "validated" ? "border-l-4 border-l-emerald-500 dark:border-l-emerald-600" :
-    "";
-
   return (
-    <Card className={borderClass}>
+    <Card>
       <CardContent className="p-4 space-y-2.5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium">{a.principle}</span>
               {variant === "failure" && (
-                <Badge variant="outline" className="text-red-700 bg-red-50 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 text-xs gap-1">
+                <span className="inline-flex items-center gap-1 text-xs font-medium">
                   <Flame className="size-3" /> Recurring failure
-                </Badge>
+                </span>
               )}
               {variant === "validated" && (
-                <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white text-xs gap-1">
+                <span className="inline-flex items-center gap-1 text-xs font-medium">
                   <ShieldCheck className="size-3" /> Validated ×{a.confirmedRunCount}
-                </Badge>
+                </span>
               )}
               {variant === "normal" && a.confirmed >= 2 && (
-                <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-400 text-xs gap-1">
+                <span className="inline-flex items-center gap-1 text-xs font-medium">
                   <TrendingUp className="size-3" /> Confirmed ×{a.confirmed}
-                </Badge>
+                </span>
               )}
               {a.totalOccurrences >= 2 && totalEv === 0 && (
-                <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-400 text-xs gap-1">
+                <span className="inline-flex items-center gap-1 text-xs font-medium">
                   <AlertCircle className="size-3" /> Needs attention
-                </Badge>
+                </span>
               )}
-              <Badge variant="outline" className="text-xs">
+              <span className="text-xs text-muted-foreground">
                 {a.totalOccurrences} run{a.totalOccurrences === 1 ? "" : "s"}
-              </Badge>
+              </span>
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">{a.source}</div>
           </div>
           <div className="flex items-center gap-3">
             {trend && <TrendIndicator trend={trend} />}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
                 <CheckCircle2 className="size-3" /> {a.confirmed}
               </span>
-              <span className="flex items-center gap-1 text-red-700 dark:text-red-400">
+              <span className="flex items-center gap-1">
                 <XCircle className="size-3" /> {a.refuted}
               </span>
-              <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+              <span className="flex items-center gap-1">
                 <MinusCircle className="size-3" /> {a.inconclusive}
               </span>
             </div>
@@ -170,35 +163,14 @@ function AggCard({ a, totalRuns, runLabels, variant = "normal" }: { a: Aggregate
           </div>
         )}
 
-        {/* Recent notes */}
-        {a.recentNotes.length > 0 && (
-          <div className="space-y-1.5">
-            {a.recentNotes.map((n, i) => (
-              <div key={i} className="text-xs flex gap-2 items-start">
-                <Badge
-                  variant="outline"
-                  className={
-                    n.verdict === "confirmed"
-                      ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400"
-                      : n.verdict === "refuted"
-                      ? "text-red-700 bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
-                      : "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400"
-                  }
-                >
-                  {n.verdict}
-                </Badge>
-                <div className="flex-1 min-w-0">
-                  <div>{n.note}</div>
-                  <div className="text-muted-foreground text-[10px] mt-0.5">
-                    {n.runLabel}{n.sampleSize ? ` · n=${n.sampleSize}` : ""} · {formatRelative(n.createdAt)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {totalEv === 0 && (
+        {totalEv > 0 ? (
+          <button
+            onClick={() => navigate(`/responses?tab=evidence&principle=${encodeURIComponent(a.principle)}`)}
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+          >
+            View {totalEv} evidence log{totalEv === 1 ? "" : "s"} →
+          </button>
+        ) : (
           <div className="text-xs text-muted-foreground border border-dashed rounded-md px-2 py-1.5">
             No real-user evidence yet. Still a hypothesis.
           </div>
@@ -206,6 +178,19 @@ function AggCard({ a, totalRuns, runLabels, variant = "normal" }: { a: Aggregate
       </CardContent>
     </Card>
   );
+}
+
+function StatBlock({ value, label, color }: { value: number | string; label: string; color?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className={`text-xl font-bold leading-none ${color ?? "text-foreground"}`}>{value}</span>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{label}</span>
+    </div>
+  );
+}
+
+function Divider() {
+  return <span className="hidden sm:block w-px bg-border" />;
 }
 
 export function PatternsView({ history, validations }: Props) {
@@ -222,7 +207,11 @@ export function PatternsView({ history, validations }: Props) {
     const byPrinciple = new Map<string, Aggregate>();
     sortedHistory.forEach((h, runIdx) => {
       h.result.findings.forEach((f) => {
-        const evidence = validations.filter((v) => v.findingId === f.id);
+        // Scope evidence to this exact run when we know it (analysisId); fall back to the
+        // looser id-only match for evidence logged before that field existed.
+        const evidence = validations.filter((v) =>
+          v.findingId === f.id && (v.analysisId ? v.analysisId === h.id : true)
+        );
         const agg = byPrinciple.get(f.principle) ?? {
           principle: f.principle,
           source: f.source,
@@ -230,7 +219,6 @@ export function PatternsView({ history, validations }: Props) {
           confirmed: 0,
           refuted: 0,
           inconclusive: 0,
-          recentNotes: [],
           runIndices: [],
           runData: [],
           criticalOrWarningRuns: 0,
@@ -260,23 +248,12 @@ export function PatternsView({ history, validations }: Props) {
           if (e.verdict === "confirmed") agg.confirmed += 1;
           else if (e.verdict === "refuted") agg.refuted += 1;
           else agg.inconclusive += 1;
-          agg.recentNotes.push({
-            note: e.note,
-            verdict: e.verdict,
-            runLabel: h.label,
-            createdAt: e.createdAt,
-            sampleSize: e.sampleSize,
-          });
         });
 
         byPrinciple.set(f.principle, agg);
       });
     });
     return Array.from(byPrinciple.values())
-      .map((a) => ({
-        ...a,
-        recentNotes: a.recentNotes.sort((x, y) => y.createdAt - x.createdAt).slice(0, 3),
-      }))
       .sort((a, b) => {
         const aEv = a.confirmed + a.refuted + a.inconclusive;
         const bEv = b.confirmed + b.refuted + b.inconclusive;
@@ -326,32 +303,18 @@ export function PatternsView({ history, validations }: Props) {
     <>
       <div>
         <h1 className="font-serif text-2xl tracking-tight">Patterns</h1>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mt-1">
-          <span>
-            <span className="font-medium">{totalRuns}</span>{" "}
-            <span className="text-muted-foreground">run{totalRuns === 1 ? "" : "s"}</span>
-          </span>
-          <span className="text-muted-foreground">·</span>
-          <span>
-            <span className="font-medium">{totalEvidence}</span>{" "}
-            <span className="text-muted-foreground">evidence log{totalEvidence === 1 ? "" : "s"}</span>
-          </span>
-          <span className="text-muted-foreground">·</span>
-          <span>
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">{totalConfirmed}</span>{" "}
-            <span className="text-muted-foreground">confirmed</span>
-          </span>
-          <span className="text-muted-foreground">·</span>
-          <span>
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">{validatedAcrossRuns.length}</span>{" "}
-            <span className="text-muted-foreground">validated across runs</span>
-          </span>
+        <div className="flex flex-wrap items-stretch gap-4 mt-3">
+          <StatBlock value={totalRuns} label={`run${totalRuns === 1 ? "" : "s"}`} />
+          <Divider />
+          <StatBlock value={totalEvidence} label={`evidence log${totalEvidence === 1 ? "" : "s"}`} />
+          <Divider />
+          <StatBlock value={totalConfirmed} label="confirmed" color="text-emerald-600 dark:text-emerald-400" />
+          <Divider />
+          <StatBlock value={validatedAcrossRuns.length} label="validated across runs" color="text-emerald-600 dark:text-emerald-400" />
           {needAttention > 0 && (
             <>
-              <span className="text-muted-foreground">·</span>
-              <span className="font-medium text-amber-600 dark:text-amber-400">
-                {needAttention} need attention
-              </span>
+              <Divider />
+              <StatBlock value={needAttention} label="need attention" color="text-amber-600 dark:text-amber-400" />
             </>
           )}
         </div>
@@ -402,8 +365,9 @@ export function PatternsView({ history, validations }: Props) {
         {recurringFailures.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-sm font-semibold font-serif">Recurring failures</h2>
-              <Badge variant="outline" className="text-xs">{recurringFailures.length}</Badge>
+              <h2 className="text-sm font-semibold font-serif">
+                Recurring failures <span className="text-muted-foreground font-normal">({recurringFailures.length})</span>
+              </h2>
               <span className="text-xs text-muted-foreground">Critical or warning in 3+ runs</span>
             </div>
             <div className="space-y-3">
@@ -418,8 +382,9 @@ export function PatternsView({ history, validations }: Props) {
         {validatedAcrossRuns.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-sm font-semibold font-serif">Validated across runs</h2>
-              <Badge variant="outline" className="text-xs">{validatedAcrossRuns.length}</Badge>
+              <h2 className="text-sm font-semibold font-serif">
+                Validated across runs <span className="text-muted-foreground font-normal">({validatedAcrossRuns.length})</span>
+              </h2>
               <span className="text-xs text-muted-foreground">Confirmed in 2+ separate sessions</span>
             </div>
             <div className="space-y-3">
@@ -434,8 +399,9 @@ export function PatternsView({ history, validations }: Props) {
         <section>
           {(recurringFailures.length > 0 || validatedAcrossRuns.length > 0) && (
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-sm font-semibold font-serif">All findings</h2>
-              <Badge variant="outline" className="text-xs">{aggregates.length}</Badge>
+              <h2 className="text-sm font-semibold font-serif">
+                All findings <span className="text-muted-foreground font-normal">({aggregates.length})</span>
+              </h2>
             </div>
           )}
           <div className="space-y-3">

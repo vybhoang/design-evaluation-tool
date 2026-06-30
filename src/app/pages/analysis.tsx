@@ -90,7 +90,7 @@ export default function AnalysisPage() {
           activeFindingId={activeFindingId}
           onSelectFinding={setActiveFindingId}
           validations={validations}
-          onAddEvidence={addEvidence}
+          onAddEvidence={(e) => addEvidence({ ...e, analysisId: entry.id, analysisLabel: entry.label })}
           onDeleteEvidence={deleteEvidence}
           context={entry.context}
           label={entry.label}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight } from "lucide-react";
 import { CompareView } from "../components/compare-view";
 import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -51,11 +51,16 @@ export default function ComparePage() {
   return (
     <>
       <div className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="font-serif text-2xl tracking-tight">Compare</h1>
-          <p className="text-sm text-muted-foreground">
-            Heuristic-level diff between two runs. <Link to="/history" className="underline underline-offset-2">See all runs</Link>.
-          </p>
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5">
+            <ArrowLeft className="size-4" /> Back
+          </Button>
+          <div>
+            <h1 className="font-serif text-2xl tracking-tight">Compare</h1>
+            <p className="text-sm text-muted-foreground">
+              Heuristic-level diff between two runs. <Link to="/history" className="underline underline-offset-2">See all runs</Link>.
+            </p>
+          </div>
         </div>
         <div className="flex items-end gap-2 flex-wrap">
           <div className="space-y-1">
@@ -96,14 +101,7 @@ export default function ComparePage() {
       </div>
 
       {a && b ? (
-        <div className="flex-1 min-h-0">
-          <CompareView
-            a={a}
-            b={b}
-            onSwap={() => setParams({ a: b.id, b: a.id })}
-            onClose={() => navigate(-1)}
-          />
-        </div>
+        <CompareView a={a} b={b} />
       ) : (
         <Card className="border-dashed">
           <CardContent className="p-12 text-center text-sm text-muted-foreground">

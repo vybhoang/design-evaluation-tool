@@ -453,6 +453,8 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
       method: `Live session${participant ? ` · ${participant}` : ""}`,
       sampleSize: 1,
       note: obs.text,
+      analysisId,
+      analysisLabel,
     });
     setObservations(
       observations.map((o) => (o.id === obsId ? { ...o, taggedFindingId: findingId, verdict, evidenceId } : o))

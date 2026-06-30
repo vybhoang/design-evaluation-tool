@@ -5,7 +5,6 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Badge } from "./ui/badge";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Separator } from "./ui/separator";
 import { toast } from "sonner";
@@ -23,9 +22,9 @@ type Props = {
 };
 
 const verdictMeta = {
-  confirmed: { icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Confirmed" },
-  refuted: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Refuted" },
-  inconclusive: { icon: MinusCircle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "Inconclusive" },
+  confirmed: { icon: CheckCircle2, label: "Confirmed" },
+  refuted: { icon: XCircle, label: "Refuted" },
+  inconclusive: { icon: MinusCircle, label: "Inconclusive" },
 };
 
 export function ValidationDialog({ finding, validations, onAdd, onDelete, trigger, open: externalOpen, onOpenChange: externalOnOpenChange }: Props) {
@@ -83,11 +82,11 @@ export function ValidationDialog({ finding, validations, onAdd, onDelete, trigge
               const m = verdictMeta[e.verdict];
               const Icon = m.icon;
               return (
-                <div key={e.id} className={`rounded-md border p-2.5 ${m.bg}`}>
+                <div key={e.id} className="rounded-md border p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <Badge variant="outline" className={`gap-1 ${m.color} bg-white/50`}>
+                    <span className="inline-flex items-center gap-1 text-xs font-medium">
                       <Icon className="size-3" /> {m.label}
-                    </Badge>
+                    </span>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -123,12 +122,14 @@ export function ValidationDialog({ finding, validations, onAdd, onDelete, trigge
                 return (
                   <Label
                     key={v}
-                    className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer ${
-                      verdict === v ? m.bg : "bg-card"
+                    className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer transition-colors ${
+                      verdict === v
+                        ? "bg-foreground text-background border-foreground"
+                        : "bg-card hover:bg-muted/50"
                     }`}
                   >
                     <RadioGroupItem value={v} />
-                    <Icon className={`size-3.5 ${m.color}`} />
+                    <Icon className="size-3.5" />
                     <span className="text-xs">{m.label}</span>
                   </Label>
                 );

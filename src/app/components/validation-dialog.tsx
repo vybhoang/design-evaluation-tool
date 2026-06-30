@@ -97,7 +97,7 @@ export function ValidationDialog({ finding, validations, onAdd, onDelete, trigge
                     </Button>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {e.method}{e.sampleSize ? ` · n=${e.sampleSize}` : ""}
+                    {e.method}{e.sampleSize != null && e.sampleSize > 1 ? ` · n=${e.sampleSize}` : ""}
                   </div>
                   <div className="text-sm mt-1">{e.note}</div>
                 </div>

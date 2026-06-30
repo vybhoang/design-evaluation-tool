@@ -1,10 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
-import {
-  TrendingUp, TrendingDown, Minus,
-  CheckCircle2, XCircle, MinusCircle,
-  AlertCircle, Flame, ShieldCheck,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent } from "./ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "./ui/chart";
@@ -94,50 +90,37 @@ function AggCard({ a, totalRuns, runLabels, variant = "normal" }: { a: Aggregate
   return (
     <Card>
       <CardContent className="p-4 space-y-2.5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">{a.principle}</span>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="font-medium leading-snug">{a.principle}</div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+              {a.source && <span>{a.source}</span>}
+              {a.source && <span aria-hidden>·</span>}
+              <span>{a.totalOccurrences} run{a.totalOccurrences === 1 ? "" : "s"}</span>
               {variant === "failure" && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium">
-                  <Flame className="size-3" /> Recurring failure
-                </span>
+                <><span aria-hidden>·</span><span className="text-red-600 font-medium">recurring failure</span></>
               )}
               {variant === "validated" && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium">
-                  <ShieldCheck className="size-3" /> Validated ×{a.confirmedRunCount}
-                </span>
+                <><span aria-hidden>·</span><span className="text-emerald-600 font-medium">validated ×{a.confirmedRunCount}</span></>
               )}
               {variant === "normal" && a.confirmed >= 2 && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium">
-                  <TrendingUp className="size-3" /> Confirmed ×{a.confirmed}
-                </span>
+                <><span aria-hidden>·</span><span>confirmed ×{a.confirmed}</span></>
               )}
               {a.totalOccurrences >= 2 && totalEv === 0 && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium">
-                  <AlertCircle className="size-3" /> Needs attention
-                </span>
+                <><span aria-hidden>·</span><span className="text-amber-600 font-medium">needs attention</span></>
               )}
-              <span className="text-xs text-muted-foreground">
-                {a.totalOccurrences} run{a.totalOccurrences === 1 ? "" : "s"}
-              </span>
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">{a.source}</div>
+            {totalEv > 0 && (
+              <div className="flex items-center gap-1.5 text-xs">
+                {a.confirmed > 0 && <span className="text-emerald-700">{a.confirmed} confirmed</span>}
+                {a.confirmed > 0 && (a.refuted > 0 || a.inconclusive > 0) && <span className="text-muted-foreground" aria-hidden>·</span>}
+                {a.refuted > 0 && <span className="text-red-600">{a.refuted} refuted</span>}
+                {a.refuted > 0 && a.inconclusive > 0 && <span className="text-muted-foreground" aria-hidden>·</span>}
+                {a.inconclusive > 0 && <span className="text-amber-600">{a.inconclusive} inconclusive</span>}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            {trend && <TrendIndicator trend={trend} />}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <CheckCircle2 className="size-3" /> {a.confirmed}
-              </span>
-              <span className="flex items-center gap-1">
-                <XCircle className="size-3" /> {a.refuted}
-              </span>
-              <span className="flex items-center gap-1">
-                <MinusCircle className="size-3" /> {a.inconclusive}
-              </span>
-            </div>
-          </div>
+          {trend && <TrendIndicator trend={trend} />}
         </div>
 
         {/* Evidence progress bar */}

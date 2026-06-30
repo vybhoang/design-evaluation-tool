@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { ShieldAlert, Hash, Users, MessageSquare, ListChecks } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import type { InterviewResponse } from "./response-store";
@@ -9,26 +9,101 @@ import type { Code } from "./codebook-store";
 // de-emphasized (never suppressed) because n is too small to read as a signal.
 const MIN_TREND_N = 3;
 
+const verdictHeaderColor = {
+  confirmed: "text-emerald-700",
+  refuted: "text-red-600",
+  inconclusive: "text-amber-600",
+} as const;
+
 type Props = {
   responses: InterviewResponse[];
   codebook: Code[];
+  onRenameCode: (id: string, label: string) => void;
+  onDeleteCode: (id: string) => void;
 };
 
-function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: number }) {
+function CodeFrequencyRow({
+  code, count, maxCount, onRename, onDelete,
+}: {
+  code: Code;
+  count: number;
+  maxCount: number;
+  onRename: (id: string, label: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(code.label);
+  const [confirming, setConfirming] = useState(false);
+
+  const commit = () => {
+    const label = draft.trim();
+    if (label && label !== code.label) onRename(code.id, label);
+    else setDraft(code.label);
+    setEditing(false);
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="size-8 rounded-md bg-muted flex items-center justify-center">
-        <Icon className="size-4 text-muted-foreground" />
+    <div className="flex items-center gap-3 group">
+      <div className="w-36 shrink-0">
+        {editing ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") { setDraft(code.label); setEditing(false); }
+            }}
+            className="w-full text-sm bg-transparent border-b border-primary outline-none pb-px"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-sm text-left hover:underline underline-offset-2 truncate w-full"
+          >
+            {code.label}
+          </button>
+        )}
       </div>
-      <div>
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-lg font-semibold leading-tight">{value}</div>
+      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+        <div className="h-full bg-primary" style={{ width: `${(count / maxCount) * 100}%` }} />
       </div>
+      <div className="w-8 text-right text-sm font-semibold tabular-nums">{count}</div>
+      {confirming ? (
+        <div className="flex items-center gap-2 text-xs shrink-0">
+          <button type="button" onClick={() => onDelete(code.id)} className="text-destructive hover:underline">
+            Delete
+          </button>
+          <button type="button" onClick={() => setConfirming(false)} className="text-muted-foreground hover:text-foreground">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="opacity-0 group-hover:opacity-100 shrink-0 size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-opacity"
+          aria-label={`Delete ${code.label}`}
+        >
+          <Trash2 className="size-3" />
+        </button>
+      )}
     </div>
   );
 }
 
-export function CodingView({ responses, codebook }: Props) {
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-2xl font-semibold tabular-nums leading-none">{value}</div>
+      <div className="text-xs text-muted-foreground mt-1">{label}</div>
+    </div>
+  );
+}
+
+export function CodingView({ responses, codebook, onRenameCode, onDeleteCode }: Props) {
   const sessions = useMemo(() => [...new Set(responses.map((r) => r.sessionLabel))], [responses]);
   const codedResponses = useMemo(() => responses.filter((r) => (r.codes?.length ?? 0) > 0), [responses]);
 
@@ -70,22 +145,12 @@ export function CodingView({ responses, codebook }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 flex items-start gap-2.5">
-        <ShieldAlert className="size-4 text-amber-700 mt-0.5 shrink-0" />
-        <div className="text-xs text-amber-900 leading-relaxed flex-1">
-          <span className="font-medium">
-            Codes from {responses.length} response{responses.length === 1 ? "" : "s"} across {sessions.length} session{sessions.length === 1 ? "" : "s"} — not a statistical sample.
-          </span>{" "}
-          Counts reflect what was said and tagged, not how many users would say it.
-        </div>
-      </div>
-
       <Card>
-        <CardContent className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat icon={MessageSquare} label="Total responses" value={responses.length} />
-          <Stat icon={Hash} label="Codes in codebook" value={codebook.length} />
-          <Stat icon={ListChecks} label="Coded responses" value={codedResponses.length} />
-          <Stat icon={Users} label="Sessions represented" value={sessions.length} />
+        <CardContent className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-6">
+          <Stat label="Responses" value={responses.length} />
+          <Stat label="Codes" value={codebook.length} />
+          <Stat label="Coded" value={codedResponses.length} />
+          <Stat label="Sessions" value={sessions.length} />
         </CardContent>
       </Card>
 
@@ -93,20 +158,18 @@ export function CodingView({ responses, codebook }: Props) {
         <CardContent className="p-4 space-y-3">
           <div className="text-sm font-medium">Code frequency</div>
           {frequency.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">No codes yet. Apply codes from the Log tab to see counts here.</div>
+            <div className="text-sm text-muted-foreground">No codes yet.</div>
           ) : (
             <div className="space-y-2.5">
               {frequency.map(({ code, count }) => (
-                <div key={code.id} className="flex items-center gap-3">
-                  <div className="w-32 shrink-0 truncate text-sm">{code.label}</div>
-                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary"
-                      style={{ width: `${(count / maxCountInTable) * 100}%` }}
-                    />
-                  </div>
-                  <div className="w-10 text-right text-sm font-semibold">{count}</div>
-                </div>
+                <CodeFrequencyRow
+                  key={code.id}
+                  code={code}
+                  count={count}
+                  maxCount={maxCountInTable}
+                  onRename={onRenameCode}
+                  onDelete={onDeleteCode}
+                />
               ))}
             </div>
           )}
@@ -117,7 +180,7 @@ export function CodingView({ responses, codebook }: Props) {
         <CardContent className="p-4 space-y-3">
           <div className="text-sm font-medium">Codes × verdict</div>
           {codeByVerdict.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">No codes yet.</div>
+            <div className="text-sm text-muted-foreground">No codes yet.</div>
           ) : (
             <div className="overflow-auto">
               <table className="w-full text-sm">
@@ -125,7 +188,7 @@ export function CodingView({ responses, codebook }: Props) {
                   <tr className="text-xs text-muted-foreground">
                     <th className="text-left py-1 pr-3 font-normal">Code</th>
                     {verdicts.map((v) => (
-                      <th key={v} className="text-left py-1 pr-3 font-normal capitalize">{v}</th>
+                      <th key={v} className={`text-left py-1 pr-3 font-medium capitalize ${verdictHeaderColor[v]}`}>{v}</th>
                     ))}
                   </tr>
                 </thead>
@@ -153,7 +216,7 @@ export function CodingView({ responses, codebook }: Props) {
         <CardContent className="p-4 space-y-3">
           <div className="text-sm font-medium">Codes × session</div>
           {codeBySession.length === 0 || sessions.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">No codes yet.</div>
+            <div className="text-sm text-muted-foreground">No codes yet.</div>
           ) : (
             <div className="overflow-auto">
               <table className="w-full text-sm">

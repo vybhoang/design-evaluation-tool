@@ -121,10 +121,11 @@ export function CompareView({ a, b }: Props) {
             {isWinner ? <Trophy className="size-3.5" /> : label}
           </Badge>
           <div className="flex-1 min-w-0">
-            <div className="font-medium truncate">{entry.label}</div>
-            <div className="text-xs text-muted-foreground">
-              {entry.context.designType} · {formatRelative(entry.createdAt)}
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="font-medium truncate">{entry.label}</div>
+              <span className="text-[11px] text-muted-foreground/60 shrink-0">{formatRelative(entry.createdAt)}</span>
             </div>
+            <div className="text-xs text-muted-foreground">{entry.context.designType}</div>
           </div>
         </div>
         <div className="aspect-video rounded-md overflow-hidden bg-muted">

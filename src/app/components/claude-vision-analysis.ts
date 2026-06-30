@@ -134,7 +134,8 @@ function clamp100(v: unknown): number {
 
 export async function analyzeWithClaude(
   context: AnalysisContext,
-  onStage?: (s: string) => void
+  onStage?: (s: string) => void,
+  signal?: AbortSignal
 ): Promise<AnalysisResult> {
   if (!isLiveAnalysisEnabled()) {
     return generateAnalysis(context.designType, context.audience);
@@ -144,12 +145,15 @@ export async function analyzeWithClaude(
     onStage?.("Preparing design for analysis…");
     const image = await imageToBase64(context.imageUrl!);
 
+    if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
+
     onStage?.("Analyzing design against UX research…");
     const response = await fetch("/api/anthropic/v1/messages", {
       method: "POST",
       headers: {
         "content-type": "application/json",
       },
+      signal,
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 4096,
@@ -226,7 +230,6 @@ export async function analyzeWithClaude(
       heatmap: mock.heatmap,
     };
   } catch (err) {
-    console.error("[Cognition] live analysis failed:", err);
     throw err;
   }
 }

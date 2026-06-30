@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { DesignCanvas, type AnalysisContext } from "../components/design-canvas";
@@ -35,13 +35,25 @@ export default function Home() {
     imageUrl: null,
     designType: "landing",
     audience: "general",
-    goal: "Convert visitors into trial signups",
+    goal: "",
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [stage, setStage] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isAnalyzing) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") abortRef.current?.abort();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isAnalyzing]);
 
   const handleAnalyze = async () => {
     if (!context.imageUrl) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setIsAnalyzing(true);
     setStage("Starting…");
     try {
@@ -50,17 +62,27 @@ export default function Home() {
         r = await analyzeWithClaude(context, (s) => {
           setStage(s);
           toast(s);
-        });
+        }, controller.signal);
       } else {
-        // Mock path: simulate staged progress with delays
-        await new Promise<void>((resolve) => {
-          MOCK_STAGES.forEach((s, i) =>
-            setTimeout(() => {
-              setStage(s);
-              if (i < MOCK_STAGES.length - 1) toast(s);
-              if (i === MOCK_STAGES.length - 1) resolve();
-            }, i * 600 + 200)
-          );
+        await new Promise<void>((resolve, reject) => {
+          const timeouts: ReturnType<typeof setTimeout>[] = [];
+          const onAbort = () => {
+            timeouts.forEach(clearTimeout);
+            reject(new DOMException("Analysis cancelled", "AbortError"));
+          };
+          controller.signal.addEventListener("abort", onAbort, { once: true });
+          MOCK_STAGES.forEach((s, i) => {
+            timeouts.push(
+              setTimeout(() => {
+                setStage(s);
+                if (i < MOCK_STAGES.length - 1) toast(s);
+                if (i === MOCK_STAGES.length - 1) {
+                  controller.signal.removeEventListener("abort", onAbort);
+                  resolve();
+                }
+              }, i * 600 + 200)
+            );
+          });
         });
         r = generateAnalysis(context.designType, context.audience);
       }
@@ -79,6 +101,7 @@ export default function Home() {
       toast.success("Analysis complete");
       navigate(`/analysis/${entry.id}`);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("401")) {
         toast.error("Invalid API key — check the ANTHROPIC_API_KEY configured for this deployment");
@@ -86,18 +109,19 @@ export default function Home() {
         toast.error("Live analysis isn't configured on this deployment — falling back to heuristic mock");
       } else {
         toast.error("Analysis failed — falling back to heuristic mock");
-        // Fallback: save a mock result so the user isn't left stranded
         try {
           const r = generateAnalysis(context.designType, context.audience);
           const thumb = await imageToThumbnail(context.imageUrl!, 200);
           const fullDataUrl = await imageToThumbnail(context.imageUrl!, 1400);
-          addEntry({ id: makeId(), createdAt: Date.now(), label: defaultLabel(context), thumbnail: thumb, context: { ...context, imageUrl: fullDataUrl }, result: r });
-          navigate(`/analysis/${history[0]?.id ?? ""}`);
+          const fallbackEntry = { id: makeId(), createdAt: Date.now(), label: defaultLabel(context), thumbnail: thumb, context: { ...context, imageUrl: fullDataUrl }, result: r };
+          addEntry(fallbackEntry);
+          navigate(`/analysis/${fallbackEntry.id}`);
         } catch { /* ignore */ }
       }
     } finally {
       setIsAnalyzing(false);
       setStage("");
+      abortRef.current = null;
     }
   };
 
@@ -108,7 +132,7 @@ export default function Home() {
       <div>
         <h1 className="font-serif text-2xl tracking-tight">New analysis</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload a design, set context, and get AI-powered UX findings with a ready-to-run test plan.
+          Upload a design, set context, and get AI-powered UX findings with a draft test plan to run with real users.
         </p>
       </div>
       <div data-tour="workflow-stepper">
@@ -121,13 +145,15 @@ export default function Home() {
           onAnalyze={handleAnalyze}
           isAnalyzing={isAnalyzing}
           analyzingStage={stage}
+          onCancel={() => abortRef.current?.abort()}
           viewerSlot={
             context.imageUrl ? (
               <Card className="relative flex-1 overflow-hidden bg-muted/30 flex items-center justify-center min-h-[420px]">
-                <img src={context.imageUrl} alt="" className="max-h-[60vh] max-w-full object-contain" />
+                <img src={context.imageUrl} alt="Uploaded design preview" className="max-h-[60vh] max-w-full object-contain" />
                 <Button
                   variant="secondary"
                   size="icon"
+                  aria-label="Remove image"
                   className="absolute top-3 right-3"
                   onClick={() => setContext({ ...context, imageUrl: null })}
                 >

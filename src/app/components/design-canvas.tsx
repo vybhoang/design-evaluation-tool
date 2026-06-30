@@ -4,6 +4,7 @@ import { isLiveAnalysisEnabled, suggestGoalsFromImage } from "./claude-vision-an
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
+import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Combobox, type ComboboxOption } from "./ui/combobox";
 
@@ -94,7 +95,7 @@ type Props = {
   onAnalyze: () => void;
   isAnalyzing: boolean;
   analyzingStage: string;
-  // when result exists, parent supplies the annotated viewer to render in place of the dropzone
+  onCancel?: () => void;
   viewerSlot?: ReactNode;
 };
 
@@ -104,19 +105,21 @@ export function DesignCanvas({
   onAnalyze,
   isAnalyzing,
   analyzingStage,
+  onCancel,
   viewerSlot,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [aiGoals, setAiGoals] = useState<string[] | null>(null);
   const [loadingGoals, setLoadingGoals] = useState(false);
+  const [imageReplaced, setImageReplaced] = useState(false);
 
   const handleFile = (file: File) => {
     const url = URL.createObjectURL(file);
+    if (context.imageUrl) setImageReplaced(true);
     setContext({ ...context, imageUrl: url });
   };
 
-  // Auto-generate goal suggestions from the uploaded design
   useEffect(() => {
     if (!context.imageUrl || !isLiveAnalysisEnabled()) {
       setAiGoals(null);
@@ -129,8 +132,7 @@ export function DesignCanvas({
       .then((goals) => {
         if (!cancelled) setAiGoals(goals);
       })
-      .catch((err) => {
-        console.error("Goal suggestion failed:", err);
+      .catch(() => {
         if (!cancelled) setAiGoals(null);
       })
       .finally(() => {
@@ -139,7 +141,6 @@ export function DesignCanvas({
     return () => {
       cancelled = true;
     };
-    // Only regenerate on a new image upload, not on every context edit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.imageUrl]);
 
@@ -167,6 +168,7 @@ export function DesignCanvas({
   };
 
   const loadDemo = () => {
+    if (context.imageUrl) setImageReplaced(true);
     setContext({ ...context, imageUrl: "/sample-design.png" });
   };
 
@@ -178,6 +180,7 @@ export function DesignCanvas({
         <Card data-tour="upload-area" className="relative flex-1 overflow-hidden border-dashed bg-muted/30 min-h-[420px]">
           <button
             type="button"
+            aria-label="Upload design — drop, click, or paste"
             onClick={() => inputRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault();
@@ -196,19 +199,19 @@ export function DesignCanvas({
                 PNG, JPG · drop, click, or paste with Ctrl/Cmd+V
               </p>
             </div>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                loadDemo();
-              }}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); loadDemo(); } }}
-              className="mt-1 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground cursor-pointer"
-            >
-              or use a sample
-            </span>
           </button>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              loadDemo();
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); loadDemo(); } }}
+            className="absolute bottom-4 left-0 right-0 text-center text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground cursor-pointer"
+          >
+            or use a sample
+          </span>
           <input
             ref={inputRef}
             type="file"
@@ -222,6 +225,12 @@ export function DesignCanvas({
         </Card>
       )}
 
+      {imageReplaced && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+          <span>⚠</span> Image changed — review your context before analysing.
+        </p>
+      )}
+
       <Card data-tour="context-fields" className="p-4 space-y-4">
         <div>
           <p className="text-sm font-medium">Analysis context</p>
@@ -229,76 +238,120 @@ export function DesignCanvas({
             Tailors the heuristic checks to your design type and audience
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Design type</Label>
-            <Combobox
-              value={context.designType}
-              onChange={(v) => {
-                const isSuggested = Object.values(GOAL_SUGGESTIONS).flat().includes(context.goal);
-                setContext({
-                  ...context,
-                  designType: v,
-                  goal: isSuggested ? (GOAL_SUGGESTIONS[v]?.[0] ?? context.goal) : context.goal,
-                });
-              }}
-              groups={[{ options: DESIGN_TYPE_OPTIONS }]}
-              placeholder="Select or type a design type…"
-              searchPlaceholder="Search or type a custom design type…"
-            />
+        {!context.imageUrl && (
+          <p className="text-xs text-muted-foreground text-center py-1">
+            Upload an image to unlock context
+          </p>
+        )}
+        <fieldset disabled={!context.imageUrl} className="contents">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Design type</Label>
+              <Combobox
+                value={context.designType}
+                onChange={(v) => {
+                  setImageReplaced(false);
+                  setContext({ ...context, designType: v, goal: "" });
+                }}
+                groups={[{ options: DESIGN_TYPE_OPTIONS }]}
+                placeholder="Select or type a design type…"
+                searchPlaceholder="Search or type a custom design type…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Target audience</Label>
+              <Combobox
+                value={context.audience}
+                onChange={(v) => { setImageReplaced(false); setContext({ ...context, audience: v }); }}
+                groups={[{ options: AUDIENCE_OPTIONS }]}
+                placeholder="Select or type an audience…"
+                searchPlaceholder="Search or type a custom audience…"
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Primary goal</Label>
+              <Input
+                value={context.goal}
+                onChange={(e) => { setImageReplaced(false); setContext({ ...context, goal: e.target.value }); }}
+                placeholder="What should users do or feel after using this design?"
+                disabled={!context.imageUrl}
+              />
+              {context.imageUrl && (
+                <div className="space-y-2">
+                  {(GOAL_SUGGESTIONS[context.designType] ?? []).slice(0, 4).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="text-xs text-muted-foreground w-full">Common goals</span>
+                      {(GOAL_SUGGESTIONS[context.designType] ?? []).slice(0, 4).map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => { setImageReplaced(false); setContext({ ...context, goal: g }); }}
+                          className="text-xs px-2 py-1 rounded-full border border-input bg-muted/50 hover:bg-muted transition-colors text-left"
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {loadingGoals && (
+                    <div className="space-y-1.5">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="size-3 animate-pulse text-primary" /> AI suggestion — edit before use
+                      </span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[60, 45, 75].map((w) => (
+                          <div key={w} className="h-6 rounded-full bg-muted animate-pulse" style={{ width: `${w}%` }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!loadingGoals && aiGoals && aiGoals.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Sparkles className="size-3 text-primary" /> AI suggestion — edit before use
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiGoals.slice(0, 4).map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => { setImageReplaced(false); setContext({ ...context, goal: g }); }}
+                            className="text-xs px-2 py-1 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-left"
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Target audience</Label>
-            <Combobox
-              value={context.audience}
-              onChange={(v) => setContext({ ...context, audience: v })}
-              groups={[{ options: AUDIENCE_OPTIONS }]}
-              placeholder="Select or type an audience…"
-              searchPlaceholder="Search or type a custom audience…"
-            />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label>Primary goal</Label>
-            <Combobox
-              value={context.goal}
-              onChange={(v) => setContext({ ...context, goal: v })}
-              loading={loadingGoals}
-              groups={[
-                {
-                  heading: "Suggested from your design",
-                  icon: Sparkles,
-                  options: (aiGoals ?? []).map((g) => ({ value: g, label: g })),
-                },
-                {
-                  heading: "Common goals",
-                  options: (GOAL_SUGGESTIONS[context.designType] ?? []).map((g) => ({ value: g, label: g })),
-                },
-              ]}
-              placeholder="What should users do or feel after using this design?"
-              searchPlaceholder="Search or type a custom goal…"
-            />
-          </div>
-        </div>
+        </fieldset>
       </Card>
 
       <div data-tour="analyze-btn" className="flex flex-col gap-2">
-        <Button
-          size="lg"
-          className="gap-2"
-          onClick={onAnalyze}
-          disabled={isAnalyzing || !context.imageUrl}
-        >
-          {isAnalyzing ? (
-            <>
+        {isAnalyzing ? (
+          <div className="flex gap-2">
+            <Button size="lg" className="gap-2 flex-1" disabled>
               <Loader2 className="size-4 animate-spin" />
               {analyzingStage || "Analyzing against UX research…"}
-            </>
-          ) : (
-            <>
-              <Sparkles className="size-4" /> Run analysis
-            </>
-          )}
-        </Button>
+            </Button>
+            <Button size="lg" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="lg"
+            className="gap-2"
+            onClick={() => { setImageReplaced(false); onAnalyze(); }}
+            disabled={!context.imageUrl}
+          >
+            <Sparkles className="size-4" /> Run analysis
+          </Button>
+        )}
         {!context.imageUrl && !isAnalyzing && (
           <p className="text-xs text-center text-muted-foreground">
             Upload a design above to get started

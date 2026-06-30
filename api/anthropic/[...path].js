@@ -1,7 +1,6 @@
-// @ts-nocheck
 export const config = { runtime: "edge" };
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return new Response(

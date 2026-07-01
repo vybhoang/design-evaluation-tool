@@ -93,7 +93,7 @@ export default function Root() {
               <NavLink to="/" className="flex items-baseline gap-3 shrink-0">
                 <span className="font-serif text-xl tracking-tight">Heurizztik</span>
                 <span className="text-xs text-muted-foreground border-l pl-3 hidden sm:inline">
-                  Heuristic review · before you put it in front of users
+                  Heuristic review tool for your design
                 </span>
               </NavLink>
               <nav className="flex items-center gap-1 overflow-x-auto max-w-full -mx-1 px-1">

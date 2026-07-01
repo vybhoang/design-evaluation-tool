@@ -18,8 +18,8 @@ export default function Landing() {
             Heurizztik
           </div>
           <h1 className="font-serif text-5xl md:text-6xl tracking-tight leading-[1.05] mb-6">
-            A second pair of eyes,<br />
-            <span className="text-muted-foreground italic">before</span> the real ones.
+            Screen it<br />
+            <span className="text-muted-foreground italic">before you mean it.</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
             Heurizztik checks your design against the UX research you'd cite in a critique:

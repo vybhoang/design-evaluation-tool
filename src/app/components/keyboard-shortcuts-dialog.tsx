@@ -10,11 +10,11 @@ const groups: { label: string; shortcuts: { keys: string[]; action: string }[] }
   {
     label: "Navigation",
     shortcuts: [
-      { keys: ["N"], action: "New analysis" },
-      { keys: ["H"], action: "Runs / History" },
-      { keys: ["P"], action: "Patterns" },
-      { keys: ["R"], action: "Responses" },
-      { keys: ["C"], action: "Compare" },
+      { keys: ["Ctrl", "N"], action: "New analysis" },
+      { keys: ["Ctrl", "H"], action: "Runs / History" },
+      { keys: ["Ctrl", "P"], action: "Patterns" },
+      { keys: ["Ctrl", "R"], action: "Responses" },
+      { keys: ["Ctrl", "M"], action: "Compare" },
       { keys: ["?"], action: "This cheat sheet" },
     ],
   },
@@ -23,7 +23,7 @@ const groups: { label: string; shortcuts: { keys: string[]; action: string }[] }
     shortcuts: [
       { keys: ["↑", "↓"], action: "Navigate findings (triage order)" },
       { keys: ["Enter", "Space"], action: "Collapse active finding" },
-      { keys: ["E"], action: "Log evidence for active finding" },
+      { keys: ["Ctrl", "E"], action: "Log evidence for active finding" },
     ],
   },
 ];

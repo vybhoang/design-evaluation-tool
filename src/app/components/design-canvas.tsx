@@ -91,7 +91,7 @@ const GOAL_SUGGESTIONS: Record<string, string[]> = {
 
 // Live calls round-trip a screenshot through Claude Vision — variable but usually
 // in this range. The mock stage simulation is fixed-length, so its estimate is exact.
-const LIVE_ESTIMATE = "15–30s";
+const LIVE_ESTIMATE = "1–1.5 min";
 const MOCK_ESTIMATE = "~3s";
 
 function formatElapsed(seconds: number) {

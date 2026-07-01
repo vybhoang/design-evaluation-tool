@@ -668,12 +668,20 @@ export function ResultsPanel({
         e.target instanceof HTMLTextAreaElement ||
         (e.target as HTMLElement).isContentEditable
       ) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.altKey) return;
       if (!visibleFindings.length) return;
 
       const currentIdx = activeFindingId
         ? visibleFindings.findIndex((f) => f.id === activeFindingId)
         : -1;
+
+      if (e.ctrlKey) {
+        if (e.key.toLowerCase() === "e" && activeFindingId) {
+          e.preventDefault();
+          setOpenEvidenceForId(activeFindingId);
+        }
+        return;
+      }
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -685,8 +693,6 @@ export function ResultsPanel({
       } else if ((e.key === "Enter" || e.key === " ") && activeFindingId) {
         e.preventDefault();
         onSelectFinding(null);
-      } else if (e.key === "e" && activeFindingId) {
-        setOpenEvidenceForId(activeFindingId);
       }
     };
     window.addEventListener("keydown", handler);

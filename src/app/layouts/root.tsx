@@ -59,15 +59,18 @@ function GlobalShortcuts() {
         e.target instanceof HTMLTextAreaElement ||
         (e.target as HTMLElement).isContentEditable
       ) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      switch (e.key) {
-        case "n": navigate("/new"); break;
-        case "h": navigate("/history"); break;
-        case "p": navigate("/patterns"); break;
-        case "r": navigate("/responses"); break;
-        case "c": navigate("/compare"); break;
-        case "?": setShortcutsOpen((v) => !v); break;
+      if (e.metaKey || e.altKey) return;
+      if (e.ctrlKey) {
+        switch (e.key.toLowerCase()) {
+          case "n": e.preventDefault(); navigate("/new"); break;
+          case "h": e.preventDefault(); navigate("/history"); break;
+          case "p": e.preventDefault(); navigate("/patterns"); break;
+          case "r": e.preventDefault(); navigate("/responses"); break;
+          case "m": e.preventDefault(); navigate("/compare"); break;
+        }
+        return;
       }
+      if (e.key === "?") setShortcutsOpen((v) => !v);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);

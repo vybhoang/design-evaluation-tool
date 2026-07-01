@@ -121,7 +121,7 @@ export function HumanTestingPanel({ result }: Props) {
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            heur project has no server. These open your own account on each platform. Nothing is sent automatically.
+            Heurizztik has no server. These open your own account on each platform. Nothing is sent automatically.
           </p>
         </div>
 

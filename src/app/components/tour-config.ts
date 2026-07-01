@@ -16,7 +16,7 @@ export type TourStep = {
 export const TOUR_STEPS: TourStep[] = [
   {
     id: "welcome",
-    title: "Welcome to heur project",
+    title: "Welcome to Heurizztik",
     body: "A two-phase UX research tool: run a fast AI heuristic review to find what is worth testing, then run targeted real-user sessions to confirm or refute those findings.",
     placement: "center",
     tourRoute: "new",

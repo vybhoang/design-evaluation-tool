@@ -15,14 +15,14 @@ export default function Landing() {
       <section className="px-6 pt-16 pb-20 border-b">
         <div className="max-w-3xl">
           <div className="text-xs tracking-[0.2em] text-muted-foreground mb-4">
-            heur project
+            Heurizztik
           </div>
           <h1 className="font-serif text-5xl md:text-6xl tracking-tight leading-[1.05] mb-6">
             A second pair of eyes,<br />
             <span className="text-muted-foreground italic">before</span> the real ones.
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
-            heur project checks your design against the UX research you'd cite in a critique:
+            Heurizztik checks your design against the UX research you'd cite in a critique:
             Nielsen heuristics, WCAG, cognitive-load literature. Then it hands you a script
             to validate what matters with real humans.
           </p>

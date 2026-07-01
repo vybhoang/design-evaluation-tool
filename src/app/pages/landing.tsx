@@ -79,7 +79,7 @@ export default function Landing() {
             />
             <Step
               n="03"
-              title="Test with humans"
+              title="Human validation"
               body="Run a moderated session inside the tool. Tag observations to findings. Patterns emerge across runs."
             />
           </div>

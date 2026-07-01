@@ -16,7 +16,7 @@ const STEPS = [
   {
     id: "test",
     icon: Users,
-    label: "Test with humans",
+    label: "Human validation",
     sub: "Real users · real evidence",
   },
 ] as const;

@@ -88,7 +88,7 @@ export default function Root() {
           <header className="border-b bg-background sticky top-0 z-10">
             <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
               <NavLink to="/" className="flex items-baseline gap-3 shrink-0">
-                <span className="font-serif text-xl tracking-tight">Cognition</span>
+                <span className="font-serif text-xl tracking-tight">heur project</span>
                 <span className="text-xs text-muted-foreground border-l pl-3 hidden sm:inline">
                   Heuristic review · before you put it in front of users
                 </span>
@@ -113,7 +113,7 @@ export default function Root() {
           <footer className="border-t mt-auto">
             <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-between gap-3 text-xs text-muted-foreground flex-wrap">
               <div className="flex items-center gap-3">
-                <span className="font-serif text-sm tracking-tight text-foreground">Cognition</span>
+                <span className="font-serif text-sm tracking-tight text-foreground">heur project</span>
                 <span>·</span>
                 <span>Runs stay on your device. No account, no telemetry.</span>
               </div>

@@ -272,6 +272,10 @@ function TourOverlay({ stepIdx, hasAnalysis, anchors, onNext, onPrev, onSkip }: 
   const isLast = stepIdx === TOUR_STEPS.length - 1;
   const s = rect;
 
+  // Don't render the card until we know where it goes. For targeted steps, wait
+  // until the element rect is resolved; center steps (no target) show immediately.
+  const cardReady = !effectiveTarget || rect !== null;
+
   const top    = s ? Math.max(0, s.top - PAD) : 0;
   const bottom = s ? Math.min(window.innerHeight, s.bottom + PAD) : 0;
   const left   = s ? Math.max(0, s.left - PAD) : 0;
@@ -294,7 +298,7 @@ function TourOverlay({ stepIdx, hasAnalysis, anchors, onNext, onPrev, onSkip }: 
       )}
 
       {/* ── Tour card ── */}
-      <div
+      {cardReady && <div
         role="dialog"
         aria-modal="true"
         aria-label={step.title}
@@ -356,7 +360,7 @@ function TourOverlay({ stepIdx, hasAnalysis, anchors, onNext, onPrev, onSkip }: 
             </Button>
           </div>
         </div>
-      </div>
+      </div>}
     </>,
     document.body
   );

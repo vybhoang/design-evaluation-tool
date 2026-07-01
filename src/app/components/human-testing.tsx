@@ -121,7 +121,7 @@ export function HumanTestingPanel({ result }: Props) {
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Cognition has no server — these open your own account on each platform. Nothing is sent automatically.
+            heur project has no server. These open your own account on each platform. Nothing is sent automatically.
           </p>
         </div>
 

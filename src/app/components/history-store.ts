@@ -15,11 +15,25 @@ const KEY = "cognition.history.v1";
 const MAX_RUNS = 30;
 let warnedAboutCap = false;
 
+function normalizeResult(r: any): HistoryEntry["result"] {
+  return {
+    clarityScore: typeof r?.clarityScore === "number" ? r.clarityScore : 0,
+    accessibilityScore: typeof r?.accessibilityScore === "number" ? r.accessibilityScore : 0,
+    findings: Array.isArray(r?.findings) ? r.findings : [],
+    principles: Array.isArray(r?.principles) ? r.principles : [],
+    lenses: Array.isArray(r?.lenses) ? r.lenses : [],
+    heatmap: Array.isArray(r?.heatmap) ? r.heatmap : [],
+    kudos: Array.isArray(r?.kudos) ? r.kudos : [],
+  };
+}
+
 export function loadHistory(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as HistoryEntry[];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((e: any) => ({ ...e, result: normalizeResult(e?.result) }));
   } catch {
     return [];
   }

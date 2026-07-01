@@ -30,6 +30,8 @@ type Props = {
   onCapturePoint?: (point: { x: number; y: number; t: number }) => void;
   definingRegion?: boolean;
   heightClassName?: string;
+  /** Stable 1-based display numbers keyed by finding ID, aligns pins with the Heuristics panel. */
+  findingNumbers?: Record<string, number>;
 };
 
 export function AnnotatedDesign({
@@ -45,6 +47,7 @@ export function AnnotatedDesign({
   onCapturePoint,
   definingRegion = false,
   heightClassName = "h-[calc(100vh-5.5rem)]",
+  findingNumbers,
 }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("annotations");
   const imageRef = useRef<HTMLImageElement>(null);
@@ -216,7 +219,7 @@ export function AnnotatedDesign({
                         isActive ? "scale-125" : "group-hover:scale-110"
                       } transition-transform`}
                     >
-                      {i + 1}
+                      {findingNumbers?.[f.id] ?? i + 1}
                     </div>
                   </button>
                 );

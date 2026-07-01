@@ -14,16 +14,16 @@ export default function Landing() {
       {/* Hero */}
       <section className="px-6 pt-16 pb-20 border-b">
         <div className="max-w-3xl">
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">
-            Heuristic review for AI-generated UI
+          <div className="text-xs tracking-[0.2em] text-muted-foreground mb-4">
+            heur project
           </div>
           <h1 className="font-serif text-5xl md:text-6xl tracking-tight leading-[1.05] mb-6">
             A second pair of eyes,<br />
             <span className="text-muted-foreground italic">before</span> the real ones.
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
-            Cognition checks your design against the UX research you'd cite in a critique —
-            Nielsen heuristics, WCAG, cognitive-load literature — then hands you a script
+            heur project checks your design against the UX research you'd cite in a critique:
+            Nielsen heuristics, WCAG, cognitive-load literature. Then it hands you a script
             to validate what matters with real humans.
           </p>
           <div className="mt-8 flex items-center gap-3 flex-wrap">
@@ -48,12 +48,12 @@ export default function Landing() {
             <ShieldAlert className="size-5 mt-1 shrink-0" />
             <div>
               <h2 className="font-serif text-2xl tracking-tight mb-2">
-                What this is — and what it isn't.
+                What this is, and what it isn't.
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 It's a checklist generator backed by published UX research. It is <em>not</em> a
                 synthetic user, and it cannot tell you whether your design "works." LLMs are
-                yes-men — simulating user feedback with one is theater. The job here is to
+                yes-men. Simulating user feedback with one is theater. The job here is to
                 catch the obvious before real users see it, and to help you write a sharper
                 test plan when they do.
               </p>
@@ -94,8 +94,8 @@ export default function Landing() {
               <h2 className="font-serif text-3xl tracking-tight mb-4">What you'll see</h2>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Findings come with a confidence label so you know which to trust outright
-                and which to treat as a hypothesis. Every flag points at a real principle —
-                Nielsen's 10, Hick's law, Fitts's law, WCAG 2.2 — so the recommendation
+                and which to treat as a hypothesis. Every flag points at a real principle:
+                Nielsen's 10, Hick's law, Fitts's law, WCAG 2.2. So the recommendation
                 isn't an opinion, it's a citation.
               </p>
               <ul className="space-y-3 text-sm">
@@ -116,10 +116,10 @@ export default function Landing() {
         <div className="max-w-3xl">
           <Quote className="size-6 text-muted-foreground mb-4" />
           <p className="font-serif text-2xl tracking-tight leading-relaxed">
-            "Generate UI with AI tools. Validate the output against UX principles — not synthetic
+            "Generate UI with AI tools. Validate the output against UX principles, not synthetic
             users. Test with real humans for actual validation."
           </p>
-          <div className="text-sm text-muted-foreground mt-4">— how good teams ship in 2026</div>
+          <div className="text-sm text-muted-foreground mt-4">how good teams ship in 2026</div>
         </div>
       </section>
 
@@ -177,7 +177,7 @@ function SampleFinding() {
           </span>
         </div>
         <div className="text-xs text-muted-foreground mb-3">
-          Nielsen — Visibility of system status · NN/g, 2020
+          Nielsen: Visibility of system status · NN/g, 2020
         </div>
         <p className="text-sm mb-4">
           The "Start trial" button sits at 880px on a 720px viewport. 73% of first-time visitors

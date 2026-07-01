@@ -9,6 +9,8 @@ export type HistoryEntry = {
   thumbnail: string;
   context: AnalysisContext;
   result: AnalysisResult;
+  /** Additional pages beyond the first. Each page has its own image and analysis result. */
+  pages?: Array<{ imageUrl: string; result: AnalysisResult }>;
 };
 
 const KEY = "cognition.history.v1";
@@ -33,7 +35,16 @@ export function loadHistory(): HistoryEntry[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((e: any) => ({ ...e, result: normalizeResult(e?.result) }));
+    return parsed.map((e: any) => ({
+          ...e,
+          result: normalizeResult(e?.result),
+          ...(Array.isArray(e?.pages) && {
+            pages: e.pages.map((p: any) => ({
+              imageUrl: p?.imageUrl ?? "",
+              result: normalizeResult(p?.result),
+            })),
+          }),
+        }));
   } catch {
     return [];
   }

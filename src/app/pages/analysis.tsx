@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Radio, GitCompareArrows, Share2, BarChart3 } from "lucide-react";
+import { ArrowLeft, Radio, GitCompareArrows, Share2, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { AnnotatedDesign } from "../components/annotated-design";
 import { ResultsPanel, triageScore } from "../components/results-panel";
 import { WorkflowStepper } from "../components/workflow-stepper";
@@ -30,24 +30,44 @@ export default function AnalysisPage() {
   const { history, validations, addEvidence, deleteEvidence } = useStore();
   const entry = history.find((h) => h.id === id);
   const [activeFindingId, setActiveFindingId] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState(0);
 
-  // Stable 1-based rank for each finding, computed once per entry+validations.
-  // Both the design canvas pins and the Heuristics panel use this so their
-  // numbers always match, regardless of panel filter or sort state.
+  // Reset page and active finding when navigating to a different entry
+  useEffect(() => {
+    setActivePage(0);
+    setActiveFindingId(null);
+  }, [id]);
+
+  // Stable 1-based rank for each finding on the active page
   const findingNumbers = useMemo(() => {
     if (!entry) return {} as Record<string, number>;
-    const sorted = [...(entry.result.findings ?? [])].sort(
+    const pages = entry.pages?.length
+      ? entry.pages
+      : [{ imageUrl: entry.context.imageUrl!, result: entry.result }];
+    const pr = pages[Math.min(activePage, pages.length - 1)]?.result ?? entry.result;
+    const sorted = [...(pr.findings ?? [])].sort(
       (a, b) => triageScore(b, validations) - triageScore(a, validations)
     );
     return Object.fromEntries(sorted.map((f, i) => [f.id, i + 1]));
-  }, [entry, validations]);
+  }, [entry, activePage, validations]);
 
   if (!entry && history.length > 0) return <Navigate to="/history" replace />;
   if (!entry) return null;
 
+  const allPages = entry.pages?.length
+    ? entry.pages
+    : [{ imageUrl: entry.context.imageUrl!, result: entry.result }];
+  const clampedPage = Math.min(activePage, allPages.length - 1);
+  const currentPage = allPages[clampedPage];
+
+  const handlePageChange = (idx: number) => {
+    setActivePage(idx);
+    setActiveFindingId(null);
+  };
+
   const others = history.filter((h) => h.id !== entry.id);
-  const result = normalizeResult(entry.result);
-  const safeEntry = { ...entry, result };
+  const result = normalizeResult(currentPage.result);
+  const safeEntry = { ...entry, result, context: { ...entry.context, imageUrl: currentPage.imageUrl } };
 
   return (
     <>
@@ -97,6 +117,32 @@ export default function AnalysisPage() {
         </div>
       </div>
 
+      {allPages.length > 1 && (
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={clampedPage === 0}
+            onClick={() => handlePageChange(clampedPage - 1)}
+          >
+            <ChevronLeft className="size-3.5" /> Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {clampedPage + 1} of {allPages.length}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={clampedPage === allPages.length - 1}
+            onClick={() => handlePageChange(clampedPage + 1)}
+          >
+            Next <ChevronRight className="size-3.5" />
+          </Button>
+        </div>
+      )}
+
       <WorkflowStepper
         hasImage
         hasResult
@@ -109,7 +155,7 @@ export default function AnalysisPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
         <div className="lg:sticky lg:top-20">
           <AnnotatedDesign
-            imageUrl={entry.context.imageUrl!}
+            imageUrl={currentPage.imageUrl}
             result={result}
             activeFindingId={activeFindingId}
             onSelectFinding={setActiveFindingId}

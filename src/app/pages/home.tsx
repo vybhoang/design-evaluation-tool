@@ -2,14 +2,16 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { DesignCanvas, type AnalysisContext } from "../components/design-canvas";
-import { generateAnalysis } from "../components/analysis-data";
+import { generateAnalysis, type AnalysisResult } from "../components/analysis-data";
 import { analyzeWithClaude, isLiveAnalysisEnabled } from "../components/claude-vision-analysis";
 import { imageToThumbnail, type HistoryEntry, formatRelative } from "../components/history-store";
 import { useStore } from "../store";
 import { WorkflowStepper } from "../components/workflow-stepper";
 import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
+
+const MAX_PAGES = 10;
 
 const MOCK_STAGES = [
   "Extracting visual hierarchy…",
@@ -37,9 +39,20 @@ export default function Home() {
     audience: "general",
     goal: "",
   });
+  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+  const [previewPage, setPreviewPage] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [stage, setStage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const addPageRef = useRef<HTMLInputElement>(null);
+
+  const allImageUrls = context.imageUrl ? [context.imageUrl, ...additionalImages] : [];
+
+  const removeAdditionalPage = (idx: number) => {
+    const next = additionalImages.filter((_, i) => i !== idx);
+    setAdditionalImages(next);
+    setPreviewPage((p) => Math.min(p, next.length)); // next.length = new total - 1
+  };
 
   useEffect(() => {
     if (!isAnalyzing) return;
@@ -50,55 +63,81 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handler);
   }, [isAnalyzing]);
 
+  const runPageAnalysis = async (
+    pageCtx: AnalysisContext,
+    pageNum: number,
+    total: number,
+    signal: AbortSignal
+  ): Promise<AnalysisResult> => {
+    if (isLiveAnalysisEnabled()) {
+      return analyzeWithClaude(
+        pageCtx,
+        (s) => {
+          const prefix = total > 1 ? `Page ${pageNum}/${total}: ` : "";
+          setStage(prefix + s);
+          toast(prefix + s);
+        },
+        signal
+      );
+    }
+    if (total > 1) toast(`Analyzing page ${pageNum} of ${total}…`);
+    return new Promise<AnalysisResult>((resolve, reject) => {
+      const timeouts: ReturnType<typeof setTimeout>[] = [];
+      const onAbort = () => {
+        timeouts.forEach(clearTimeout);
+        reject(new DOMException("Analysis cancelled", "AbortError"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      MOCK_STAGES.forEach((s, i) => {
+        timeouts.push(
+          setTimeout(() => {
+            const prefix = total > 1 ? `Page ${pageNum}/${total}: ` : "";
+            setStage(prefix + s);
+            if (total === 1 && i < MOCK_STAGES.length - 1) toast(s);
+            if (i === MOCK_STAGES.length - 1) {
+              signal.removeEventListener("abort", onAbort);
+              resolve(generateAnalysis(pageCtx.designType, pageCtx.audience));
+            }
+          }, i * 600 + 200)
+        );
+      });
+    });
+  };
+
   const handleAnalyze = async () => {
     if (!context.imageUrl) return;
+    const allUrls = [context.imageUrl, ...additionalImages];
     const controller = new AbortController();
     abortRef.current = controller;
     setIsAnalyzing(true);
     setStage("Starting…");
+
     try {
-      let r;
-      if (isLiveAnalysisEnabled()) {
-        r = await analyzeWithClaude(context, (s) => {
-          setStage(s);
-          toast(s);
-        }, controller.signal);
-      } else {
-        await new Promise<void>((resolve, reject) => {
-          const timeouts: ReturnType<typeof setTimeout>[] = [];
-          const onAbort = () => {
-            timeouts.forEach(clearTimeout);
-            reject(new DOMException("Analysis cancelled", "AbortError"));
-          };
-          controller.signal.addEventListener("abort", onAbort, { once: true });
-          MOCK_STAGES.forEach((s, i) => {
-            timeouts.push(
-              setTimeout(() => {
-                setStage(s);
-                if (i < MOCK_STAGES.length - 1) toast(s);
-                if (i === MOCK_STAGES.length - 1) {
-                  controller.signal.removeEventListener("abort", onAbort);
-                  resolve();
-                }
-              }, i * 600 + 200)
-            );
-          });
-        });
-        r = generateAnalysis(context.designType, context.audience);
+      const pageResults: Array<{ imageUrl: string; result: AnalysisResult }> = [];
+
+      for (let i = 0; i < allUrls.length; i++) {
+        const pageCtx = { ...context, imageUrl: allUrls[i] };
+        const result = await runPageAnalysis(pageCtx, i + 1, allUrls.length, controller.signal);
+        const fullDataUrl = await imageToThumbnail(allUrls[i], 1400);
+        pageResults.push({ imageUrl: fullDataUrl, result });
       }
 
-      const thumb = await imageToThumbnail(context.imageUrl!, 200);
-      const fullDataUrl = await imageToThumbnail(context.imageUrl!, 1400);
+      const thumb = await imageToThumbnail(context.imageUrl, 200);
       const entry: HistoryEntry = {
         id: makeId(),
         createdAt: Date.now(),
         label: defaultLabel(context),
         thumbnail: thumb,
-        context: { ...context, imageUrl: fullDataUrl },
-        result: r,
+        context: { ...context, imageUrl: pageResults[0].imageUrl },
+        result: pageResults[0].result,
+        pages: pageResults.length > 1 ? pageResults : undefined,
       };
       addEntry(entry);
-      toast.success("Analysis complete");
+      toast.success(
+        pageResults.length > 1
+          ? `Analysis complete — ${pageResults.length} pages`
+          : "Analysis complete"
+      );
       navigate(`/analysis/${entry.id}`);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -113,7 +152,14 @@ export default function Home() {
           const r = generateAnalysis(context.designType, context.audience);
           const thumb = await imageToThumbnail(context.imageUrl!, 200);
           const fullDataUrl = await imageToThumbnail(context.imageUrl!, 1400);
-          const fallbackEntry = { id: makeId(), createdAt: Date.now(), label: defaultLabel(context), thumbnail: thumb, context: { ...context, imageUrl: fullDataUrl }, result: r };
+          const fallbackEntry: HistoryEntry = {
+            id: makeId(),
+            createdAt: Date.now(),
+            label: defaultLabel(context),
+            thumbnail: thumb,
+            context: { ...context, imageUrl: fullDataUrl },
+            result: r,
+          };
           addEntry(fallbackEntry);
           navigate(`/analysis/${fallbackEntry.id}`);
         } catch { /* ignore */ }
@@ -126,6 +172,98 @@ export default function Home() {
   };
 
   const recent = history.slice(0, 4);
+
+  const viewerSlot = context.imageUrl ? (
+    <Card className="relative flex-1 overflow-hidden bg-muted/30 flex flex-col min-h-[420px]">
+      {/* Current page preview */}
+      <div className="flex-1 flex items-center justify-center p-6 min-h-0">
+        <img
+          src={allImageUrls[previewPage] ?? context.imageUrl}
+          alt={`Page ${previewPage + 1} design preview`}
+          className="max-h-[50vh] max-w-full object-contain rounded-md shadow-sm"
+        />
+      </div>
+
+      {/* Page strip */}
+      <div className="border-t bg-muted/20 px-3 py-2 flex items-center gap-2 overflow-x-auto shrink-0">
+        {allImageUrls.map((url, i) => (
+          <div
+            key={i}
+            role="button"
+            tabIndex={0}
+            aria-label={`Preview page ${i + 1}`}
+            onClick={() => setPreviewPage(i)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setPreviewPage(i); }}
+            className={`relative shrink-0 rounded cursor-pointer transition-all ring-2 ${
+              previewPage === i ? "ring-primary" : "ring-transparent opacity-60 hover:opacity-100"
+            }`}
+          >
+            <img src={url} alt={`Page ${i + 1}`} className="size-10 object-cover rounded" />
+            {i > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); removeAdditionalPage(i - 1); }}
+                className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-background border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={`Remove page ${i + 1}`}
+              >
+                <X className="size-2.5" />
+              </button>
+            )}
+            <div className="absolute bottom-0 left-0 right-0 text-center text-[9px] text-white bg-black/50 rounded-b leading-tight py-0.5 pointer-events-none">
+              {i + 1}
+            </div>
+          </div>
+        ))}
+
+        {allImageUrls.length < MAX_PAGES && (
+          <>
+            <button
+              onClick={() => addPageRef.current?.click()}
+              className="size-10 shrink-0 rounded border-2 border-dashed border-border hover:border-foreground/40 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Add another page"
+              title={`Add another page (max ${MAX_PAGES})`}
+            >
+              <Plus className="size-3.5" />
+            </button>
+            <input
+              ref={addPageRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  const url = URL.createObjectURL(f);
+                  setAdditionalImages((prev) => [...prev, url]);
+                  setPreviewPage(allImageUrls.length);
+                }
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
+
+        {allImageUrls.length > 1 && (
+          <span className="text-xs text-muted-foreground ml-1 shrink-0">
+            {allImageUrls.length}/{MAX_PAGES} pages
+          </span>
+        )}
+      </div>
+
+      <Button
+        variant="secondary"
+        size="icon"
+        aria-label="Remove all images"
+        className="absolute top-3 right-3"
+        onClick={() => {
+          setContext({ ...context, imageUrl: null });
+          setAdditionalImages([]);
+          setPreviewPage(0);
+        }}
+      >
+        <X className="size-4" />
+      </Button>
+    </Card>
+  ) : null;
 
   return (
     <>
@@ -141,27 +279,18 @@ export default function Home() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 flex-1 min-h-0">
         <DesignCanvas
           context={context}
-          setContext={setContext}
+          setContext={(c) => {
+            if (!c.imageUrl) {
+              setAdditionalImages([]);
+              setPreviewPage(0);
+            }
+            setContext(c);
+          }}
           onAnalyze={handleAnalyze}
           isAnalyzing={isAnalyzing}
           analyzingStage={stage}
           onCancel={() => abortRef.current?.abort()}
-          viewerSlot={
-            context.imageUrl ? (
-              <Card className="relative flex-1 overflow-hidden bg-muted/30 flex items-center justify-center min-h-[420px]">
-                <img src={context.imageUrl} alt="Uploaded design preview" className="max-h-[60vh] max-w-full object-contain" />
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  aria-label="Remove image"
-                  className="absolute top-3 right-3"
-                  onClick={() => setContext({ ...context, imageUrl: null })}
-                >
-                  <X className="size-4" />
-                </Button>
-              </Card>
-            ) : null
-          }
+          viewerSlot={viewerSlot}
         />
         <aside className="space-y-3 min-w-0">
           <div className="flex items-start justify-between">

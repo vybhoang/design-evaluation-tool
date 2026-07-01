@@ -360,7 +360,7 @@ export function DesignCanvas({
             </div>
             <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
               <Clock className="size-3" />
-              {formatElapsed(elapsed)} elapsed · usually takes {isLiveAnalysisEnabled() ? LIVE_ESTIMATE : MOCK_ESTIMATE}
+              {formatElapsed(elapsed)} elapsed · usually takes {isLiveAnalysisEnabled() ? LIVE_ESTIMATE : MOCK_ESTIMATE} per page
             </p>
           </div>
         ) : (

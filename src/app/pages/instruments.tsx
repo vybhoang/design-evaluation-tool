@@ -1,11 +1,12 @@
 import { Navigate, useNavigate, useParams, Link } from "react-router";
-import { ArrowLeft, Gauge, MousePointerClick, ListChecks, LayoutGrid } from "lucide-react";
+import { ArrowLeft, Gauge, MousePointerClick, ListChecks, LayoutGrid, HeartHandshake } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { ScalesView } from "../components/scales-view";
 import { FirstClickView } from "../components/first-click-view";
 import { TaskCompletionView } from "../components/task-completion-view";
 import { CardSortView } from "../components/card-sort-view";
+import { EmpathyMapView } from "../components/empathy-map-view";
 import { useStore } from "../store";
 
 export default function InstrumentsPage() {
@@ -34,7 +35,7 @@ export default function InstrumentsPage() {
       </div>
 
       <Tabs defaultValue="scales" className="flex flex-col">
-        <TabsList className="shrink-0 grid grid-cols-2 sm:grid-cols-4 w-full max-w-2xl">
+        <TabsList className="shrink-0 grid grid-cols-2 sm:grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="scales" className="gap-1.5">
             <Gauge className="size-4" /> Scales
           </TabsTrigger>
@@ -46,6 +47,9 @@ export default function InstrumentsPage() {
           </TabsTrigger>
           <TabsTrigger value="card-sort" className="gap-1.5">
             <LayoutGrid className="size-4" /> Card sort
+          </TabsTrigger>
+          <TabsTrigger value="empathy-map" className="gap-1.5">
+            <HeartHandshake className="size-4" /> Empathy map
           </TabsTrigger>
         </TabsList>
 
@@ -60,6 +64,9 @@ export default function InstrumentsPage() {
         </TabsContent>
         <TabsContent value="card-sort" className="mt-3">
           <CardSortView entry={entry} />
+        </TabsContent>
+        <TabsContent value="empathy-map" className="mt-3">
+          <EmpathyMapView entry={entry} />
         </TabsContent>
       </Tabs>
     </>

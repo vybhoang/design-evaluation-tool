@@ -54,6 +54,16 @@ import {
   type CardSortDeck,
   type CardSortPlacement,
 } from "./components/card-sort-store";
+import {
+  loadEmpathyMaps,
+  saveEmpathyMaps,
+  loadEmpathyMapEntries,
+  saveEmpathyMapEntries,
+  makeEmpathyMapId,
+  type EmpathyMap,
+  type EmpathyMapEntry,
+  type DistributiveOmit,
+} from "./components/empathy-map-store";
 
 type StoreShape = {
   history: HistoryEntry[];
@@ -66,6 +76,8 @@ type StoreShape = {
   taskRuns: TaskRun[];
   cardSortDecks: CardSortDeck[];
   cardSortPlacements: CardSortPlacement[];
+  empathyMaps: EmpathyMap[];
+  empathyMapEntries: EmpathyMapEntry[];
   addEntry: (e: HistoryEntry) => void;
   deleteEntry: (id: string) => void;
   clearHistory: () => void;
@@ -91,6 +103,10 @@ type StoreShape = {
   updateCardSortDeck: (id: string, patch: Partial<Pick<CardSortDeck, "cards" | "categories">>) => void;
   deleteCardSortDeck: (id: string) => void;
   addCardSortPlacements: (placements: Omit<CardSortPlacement, "id" | "createdAt">[]) => void;
+  addEmpathyMap: (m: Omit<EmpathyMap, "id" | "createdAt">) => string;
+  deleteEmpathyMap: (id: string) => void;
+  addEmpathyMapEntry: (e: DistributiveOmit<EmpathyMapEntry, "id" | "createdAt">) => string;
+  deleteEmpathyMapEntry: (id: string) => void;
 };
 
 const Ctx = createContext<StoreShape | null>(null);
@@ -106,6 +122,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [taskRuns, setTaskRuns] = useState<TaskRun[]>([]);
   const [cardSortDecks, setCardSortDecks] = useState<CardSortDeck[]>([]);
   const [cardSortPlacements, setCardSortPlacements] = useState<CardSortPlacement[]>([]);
+  const [empathyMaps, setEmpathyMaps] = useState<EmpathyMap[]>([]);
+  const [empathyMapEntries, setEmpathyMapEntries] = useState<EmpathyMapEntry[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   // Load once on mount
@@ -120,6 +138,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTaskRuns(loadTaskRuns());
     setCardSortDecks(loadCardSortDecks());
     setCardSortPlacements(loadCardSortPlacements());
+    setEmpathyMaps(loadEmpathyMaps());
+    setEmpathyMapEntries(loadEmpathyMapEntries());
     setHydrated(true);
   }, []);
 
@@ -135,6 +155,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (hydrated) saveTaskRuns(taskRuns); }, [taskRuns, hydrated]);
   useEffect(() => { if (hydrated) saveCardSortDecks(cardSortDecks); }, [cardSortDecks, hydrated]);
   useEffect(() => { if (hydrated) saveCardSortPlacements(cardSortPlacements); }, [cardSortPlacements, hydrated]);
+  useEffect(() => { if (hydrated) saveEmpathyMaps(empathyMaps); }, [empathyMaps, hydrated]);
+  useEffect(() => { if (hydrated) saveEmpathyMapEntries(empathyMapEntries); }, [empathyMapEntries, hydrated]);
 
   const value: StoreShape = {
     history,
@@ -147,6 +169,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     taskRuns,
     cardSortDecks,
     cardSortPlacements,
+    empathyMaps,
+    empathyMapEntries,
     addEntry: (e) => setHistory((prev) => [e, ...prev]),
     deleteEntry: (id) => setHistory((prev) => prev.filter((h) => h.id !== id)),
     clearHistory: () => setHistory([]),
@@ -246,6 +270,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const rows = placements.map((p) => ({ ...p, id: makeCardSortId(), createdAt: now }));
       setCardSortPlacements((prev) => [...rows, ...prev]);
     },
+    addEmpathyMap: (m) => {
+      const id = makeEmpathyMapId();
+      setEmpathyMaps((prev) => [...prev, { ...m, id, createdAt: Date.now() }]);
+      return id;
+    },
+    deleteEmpathyMap: (id) => {
+      setEmpathyMaps((prev) => prev.filter((m) => m.id !== id));
+      setEmpathyMapEntries((prev) => prev.filter((e) => e.mapId !== id));
+    },
+    addEmpathyMapEntry: (e) => {
+      const id = makeEmpathyMapId();
+      setEmpathyMapEntries((prev) => [...prev, { ...e, id, createdAt: Date.now() }]);
+      return id;
+    },
+    deleteEmpathyMapEntry: (id) =>
+      setEmpathyMapEntries((prev) => prev.filter((e) => e.id !== id)),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

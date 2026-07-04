@@ -51,11 +51,12 @@ export default function Landing() {
                 What this is, and what it isn't.
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                It's a checklist generator backed by published UX research. It is <em>not</em> a
-                synthetic user, and it cannot tell you whether your design "works." LLMs are
-                yes-men. Simulating user feedback with one is theater. The job here is to
-                catch the obvious before real users see it, and to help you write a sharper
-                test plan when they do.
+                It's a heuristic pass backed by published UX research, and a workflow to
+                validate what it finds with real people. It is <em>not</em> a synthetic user,
+                and it cannot tell you whether your design "works." LLMs are yes-men.
+                Simulating user feedback with one is theater. The job here is to catch the
+                obvious before real users see it, help you write a sharper test plan, and
+                keep track of what actually gets confirmed once real people try it.
               </p>
             </div>
           </div>

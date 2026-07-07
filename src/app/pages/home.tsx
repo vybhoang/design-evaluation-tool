@@ -39,18 +39,38 @@ export default function Home() {
     audience: "general",
     goal: "",
   });
-  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+  // Pages beyond the first each carry their own analysis context, defaulting to
+  // a copy of the first image's context at the moment they're added.
+  const [additionalPages, setAdditionalPages] = useState<
+    Array<{ imageUrl: string; context: AnalysisContext }>
+  >([]);
   const [previewPage, setPreviewPage] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [stage, setStage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const addPageRef = useRef<HTMLInputElement>(null);
 
-  const allImageUrls = context.imageUrl ? [context.imageUrl, ...additionalImages] : [];
+  const allImageUrls = context.imageUrl ? [context.imageUrl, ...additionalPages.map((p) => p.imageUrl)] : [];
+  const pageContexts = [context, ...additionalPages.map((p) => p.context)];
+  const activeContext = pageContexts[previewPage] ?? context;
+
+  const setActiveContext = (c: AnalysisContext) => {
+    if (previewPage === 0) {
+      if (!c.imageUrl) {
+        setAdditionalPages([]);
+        setPreviewPage(0);
+      }
+      setContext(c);
+    } else {
+      setAdditionalPages((prev) =>
+        prev.map((p, i) => (i === previewPage - 1 ? { ...p, context: c } : p))
+      );
+    }
+  };
 
   const removeAdditionalPage = (idx: number) => {
-    const next = additionalImages.filter((_, i) => i !== idx);
-    setAdditionalImages(next);
+    const next = additionalPages.filter((_, i) => i !== idx);
+    setAdditionalPages(next);
     setPreviewPage((p) => Math.min(p, next.length)); // next.length = new total - 1
   };
 
@@ -106,20 +126,21 @@ export default function Home() {
 
   const handleAnalyze = async () => {
     if (!context.imageUrl) return;
-    const allUrls = [context.imageUrl, ...additionalImages];
+    const allUrls = [context.imageUrl, ...additionalPages.map((p) => p.imageUrl)];
+    const allContexts = [context, ...additionalPages.map((p) => p.context)];
     const controller = new AbortController();
     abortRef.current = controller;
     setIsAnalyzing(true);
     setStage("Starting…");
 
     try {
-      const pageResults: Array<{ imageUrl: string; result: AnalysisResult }> = [];
+      const pageResults: Array<{ imageUrl: string; result: AnalysisResult; context: AnalysisContext }> = [];
 
       for (let i = 0; i < allUrls.length; i++) {
-        const pageCtx = { ...context, imageUrl: allUrls[i] };
+        const pageCtx = { ...allContexts[i], imageUrl: allUrls[i] };
         const result = await runPageAnalysis(pageCtx, i + 1, allUrls.length, controller.signal);
         const fullDataUrl = await imageToThumbnail(allUrls[i], 1400);
-        pageResults.push({ imageUrl: fullDataUrl, result });
+        pageResults.push({ imageUrl: fullDataUrl, result, context: pageCtx });
       }
 
       const thumb = await imageToThumbnail(context.imageUrl, 200);
@@ -233,7 +254,7 @@ export default function Home() {
                 const f = e.target.files?.[0];
                 if (f) {
                   const url = URL.createObjectURL(f);
-                  setAdditionalImages((prev) => [...prev, url]);
+                  setAdditionalPages((prev) => [...prev, { imageUrl: url, context: { ...context, imageUrl: url } }]);
                   setPreviewPage(allImageUrls.length);
                 }
                 e.target.value = "";
@@ -256,7 +277,7 @@ export default function Home() {
         className="absolute top-3 right-3"
         onClick={() => {
           setContext({ ...context, imageUrl: null });
-          setAdditionalImages([]);
+          setAdditionalPages([]);
           setPreviewPage(0);
         }}
       >
@@ -278,19 +299,22 @@ export default function Home() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 flex-1 min-h-0">
         <DesignCanvas
-          context={context}
-          setContext={(c) => {
-            if (!c.imageUrl) {
-              setAdditionalImages([]);
-              setPreviewPage(0);
-            }
-            setContext(c);
-          }}
+          context={activeContext}
+          setContext={setActiveContext}
           onAnalyze={handleAnalyze}
           isAnalyzing={isAnalyzing}
           analyzingStage={stage}
           onCancel={() => abortRef.current?.abort()}
           viewerSlot={viewerSlot}
+          pageIndicator={
+            allImageUrls.length > 1
+              ? {
+                  index: previewPage,
+                  total: allImageUrls.length,
+                  onCopyFromFirst: () => setActiveContext({ ...context, imageUrl: allImageUrls[previewPage] }),
+                }
+              : undefined
+          }
         />
         <aside className="space-y-3 min-w-0">
           <div className="flex items-start justify-between">

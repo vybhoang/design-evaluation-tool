@@ -99,6 +99,12 @@ function formatElapsed(seconds: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+type PageIndicator = {
+  index: number;
+  total: number;
+  onCopyFromFirst?: () => void;
+};
+
 type Props = {
   context: AnalysisContext;
   setContext: (c: AnalysisContext) => void;
@@ -107,6 +113,7 @@ type Props = {
   analyzingStage: string;
   onCancel?: () => void;
   viewerSlot?: ReactNode;
+  pageIndicator?: PageIndicator;
 };
 
 export function DesignCanvas({
@@ -117,6 +124,7 @@ export function DesignCanvas({
   analyzingStage,
   onCancel,
   viewerSlot,
+  pageIndicator,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -252,11 +260,24 @@ export function DesignCanvas({
       )}
 
       <Card data-tour="context-fields" className="p-4 space-y-4">
-        <div>
-          <p className="text-sm font-medium">Analysis context</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Tailors the heuristic checks to your design type and audience
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium">Analysis context</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {pageIndicator && pageIndicator.total > 1
+                ? `Editing context for page ${pageIndicator.index + 1} of ${pageIndicator.total}`
+                : "Tailors the heuristic checks to your design type and audience"}
+            </p>
+          </div>
+          {pageIndicator && pageIndicator.total > 1 && pageIndicator.index > 0 && pageIndicator.onCopyFromFirst && (
+            <button
+              type="button"
+              onClick={pageIndicator.onCopyFromFirst}
+              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors shrink-0"
+            >
+              Use page 1's context
+            </button>
+          )}
         </div>
         <fieldset disabled={!context.imageUrl} className="contents">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

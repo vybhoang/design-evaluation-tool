@@ -67,7 +67,8 @@ export default function AnalysisPage() {
 
   const others = history.filter((h) => h.id !== entry.id);
   const result = normalizeResult(currentPage.result);
-  const safeEntry = { ...entry, result, context: { ...entry.context, imageUrl: currentPage.imageUrl } };
+  const pageContext = "context" in currentPage && currentPage.context ? currentPage.context : entry.context;
+  const safeEntry = { ...entry, result, context: { ...pageContext, imageUrl: currentPage.imageUrl } };
 
   return (
     <>
@@ -79,7 +80,7 @@ export default function AnalysisPage() {
           <div className="min-w-0">
             <h1 className="font-serif text-xl tracking-tight truncate">{entry.label}</h1>
             <div className="text-xs text-muted-foreground">
-              {entry.context.designType} · {entry.context.audience} · {result.findings.length} findings
+              {pageContext.designType} · {pageContext.audience} · {result.findings.length} findings
             </div>
           </div>
         </div>
@@ -171,7 +172,7 @@ export default function AnalysisPage() {
           validations={validations}
           onAddEvidence={(e) => addEvidence({ ...e, analysisId: entry.id, analysisLabel: entry.label })}
           onDeleteEvidence={deleteEvidence}
-          context={entry.context}
+          context={pageContext}
           label={entry.label}
           findingNumbers={findingNumbers}
         />

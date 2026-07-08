@@ -1,4 +1,12 @@
 {
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "quant-qual-ui-ux-fy1p-vybhoangs-projects.vercel.app" }],
+      "destination": "https://quant-qual-ui-ux-fy1p.vercel.app/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }

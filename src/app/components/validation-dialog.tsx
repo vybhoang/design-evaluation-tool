@@ -113,7 +113,7 @@ export function ValidationDialog({ finding, validations, onAdd, onDelete, trigge
             <Label className="text-xs">Verdict from real users</Label>
             <RadioGroup
               value={verdict}
-              onValueChange={(v) => setVerdict(v as any)}
+              onValueChange={(v) => setVerdict(v as "confirmed" | "refuted" | "inconclusive")}
               className="grid grid-cols-3 gap-2 mt-1"
             >
               {(["confirmed", "refuted", "inconclusive"] as const).map((v) => {

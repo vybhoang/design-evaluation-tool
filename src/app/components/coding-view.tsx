@@ -15,6 +15,8 @@ const verdictHeaderColor = {
   inconclusive: "text-amber-600",
 } as const;
 
+const VERDICTS = ["confirmed", "refuted", "inconclusive"] as const;
+
 type Props = {
   responses: InterviewResponse[];
   codebook: Code[];
@@ -121,11 +123,9 @@ export function CodingView({ responses, codebook, onRenameCode, onDeleteCode }: 
     [frequency]
   );
 
-  const verdicts = ["confirmed", "refuted", "inconclusive"] as const;
-
   const codeByVerdict = useMemo(() => {
     return codebook.map((c) => {
-      const counts = verdicts.map((v) => ({
+      const counts = VERDICTS.map((v) => ({
         verdict: v,
         count: responses.filter((r) => r.codes?.includes(c.id) && r.verdict === v).length,
       }));
@@ -187,7 +187,7 @@ export function CodingView({ responses, codebook, onRenameCode, onDeleteCode }: 
                 <thead>
                   <tr className="text-xs text-muted-foreground">
                     <th className="text-left py-1 pr-3 font-normal">Code</th>
-                    {verdicts.map((v) => (
+                    {VERDICTS.map((v) => (
                       <th key={v} className={`text-left py-1 pr-3 font-medium capitalize ${verdictHeaderColor[v]}`}>{v}</th>
                     ))}
                   </tr>

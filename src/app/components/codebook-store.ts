@@ -36,6 +36,6 @@ export function renameCode(codes: Code[], id: string, label: string): Code[] {
   return codes.map((c) => (c.id === id ? { ...c, label } : c));
 }
 
-export function mergeCodes(codes: Code[], fromId: string, intoId: string): Code[] {
+export function mergeCodes(codes: Code[], fromId: string): Code[] {
   return codes.filter((c) => c.id !== fromId);
 }

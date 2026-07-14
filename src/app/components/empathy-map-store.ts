@@ -29,7 +29,7 @@ export type EmpathyMapNoteEntry = EmpathyMapEntryBase & {
 
 export type EmpathyMapEntry = EmpathyMapQuoteEntry | EmpathyMapNoteEntry;
 
-export type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never;
+export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 const MAPS_KEY = "cognition.empathyMaps.v1";
 const ENTRIES_KEY = "cognition.empathyMapEntries.v2";

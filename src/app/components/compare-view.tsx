@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowDown, ArrowUp, ArrowRight, Minus, Trophy, AlertTriangle, XCircle, Eye, Accessibility, Plus, Equal, ArrowLeftRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRight, Minus, Trophy, AlertTriangle, XCircle, Eye, Accessibility, Plus, Equal, ArrowLeftRight, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { severityMeta } from "./results-panel";
@@ -39,7 +39,7 @@ function Delta({ value, suffix = "" }: { value: number; suffix?: string }) {
 function ScoreCmp({
   label, icon: Icon, a, b, higherIsBetter = true,
 }: {
-  label: string; icon: any; a: number; b: number; higherIsBetter?: boolean;
+  label: string; icon: LucideIcon; a: number; b: number; higherIsBetter?: boolean;
 }) {
   const delta = b - a;
   const adjDelta = higherIsBetter ? delta : -delta;

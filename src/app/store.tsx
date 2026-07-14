@@ -196,7 +196,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     renameCode: (id, label) => setCodebook((prev) => renameCodeIn(prev, id, label)),
     mergeCode: (fromId, intoId) => {
-      setCodebook((prev) => mergeCodesIn(prev, fromId, intoId));
+      setCodebook((prev) => mergeCodesIn(prev, fromId));
       setResponses((prev) =>
         prev.map((r) => {
           if (!r.codes || !r.codes.includes(fromId)) return r;

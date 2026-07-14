@@ -17,15 +17,19 @@ const KEY = "cognition.history.v1";
 const MAX_RUNS = 30;
 let warnedAboutCap = false;
 
-function normalizeResult(r: any): HistoryEntry["result"] {
+type RawHistoryEntry = Partial<HistoryEntry> & { result?: unknown; pages?: unknown };
+type RawHistoryPage = { imageUrl?: unknown; result?: unknown; context?: AnalysisContext };
+
+function normalizeResult(r: unknown): HistoryEntry["result"] {
+  const obj = (r ?? {}) as Record<string, unknown>;
   return {
-    clarityScore: typeof r?.clarityScore === "number" ? r.clarityScore : 0,
-    accessibilityScore: typeof r?.accessibilityScore === "number" ? r.accessibilityScore : 0,
-    findings: Array.isArray(r?.findings) ? r.findings : [],
-    principles: Array.isArray(r?.principles) ? r.principles : [],
-    lenses: Array.isArray(r?.lenses) ? r.lenses : [],
-    heatmap: Array.isArray(r?.heatmap) ? r.heatmap : [],
-    kudos: Array.isArray(r?.kudos) ? r.kudos : [],
+    clarityScore: typeof obj.clarityScore === "number" ? obj.clarityScore : 0,
+    accessibilityScore: typeof obj.accessibilityScore === "number" ? obj.accessibilityScore : 0,
+    findings: Array.isArray(obj.findings) ? (obj.findings as HistoryEntry["result"]["findings"]) : [],
+    principles: Array.isArray(obj.principles) ? (obj.principles as HistoryEntry["result"]["principles"]) : [],
+    lenses: Array.isArray(obj.lenses) ? (obj.lenses as HistoryEntry["result"]["lenses"]) : [],
+    heatmap: Array.isArray(obj.heatmap) ? (obj.heatmap as HistoryEntry["result"]["heatmap"]) : [],
+    kudos: Array.isArray(obj.kudos) ? (obj.kudos as HistoryEntry["result"]["kudos"]) : [],
   };
 }
 
@@ -33,19 +37,19 @@ export function loadHistory(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((e: any) => ({
+    return (parsed as RawHistoryEntry[]).map((e) => ({
           ...e,
           result: normalizeResult(e?.result),
           ...(Array.isArray(e?.pages) && {
-            pages: e.pages.map((p: any) => ({
-              imageUrl: p?.imageUrl ?? "",
+            pages: (e.pages as RawHistoryPage[]).map((p) => ({
+              imageUrl: typeof p?.imageUrl === "string" ? p.imageUrl : "",
               result: normalizeResult(p?.result),
               ...(p?.context && { context: p.context }),
             })),
           }),
-        }));
+        })) as HistoryEntry[];
   } catch {
     return [];
   }

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { MessageCircle, Sparkles, RefreshCw, Plus, X, Beaker, Wand2, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";

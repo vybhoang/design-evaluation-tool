@@ -1,5 +1,5 @@
 import type { AnalysisContext } from "./design-canvas";
-import type { AnalysisResult, ResearchFinding, CognitivePrinciple, Kudos } from "./analysis-data";
+import type { AnalysisResult, ResearchFinding, CognitivePrinciple, Kudos, Severity, Confidence } from "./analysis-data";
 import { generateAnalysis } from "./analysis-data";
 
 // The Anthropic key itself never reaches the client — it's injected server-side
@@ -11,13 +11,23 @@ export function isLiveAnalysisEnabled(): boolean {
   return val === "true";
 }
 
+type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+const VALID_MEDIA_TYPES = new Set<string>(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+// Claude's vision API only accepts these four types — anything else (e.g. image/svg+xml)
+// falls back to image/png rather than silently forwarding an unsupported mime type.
+function toMediaType(mime: string): ImageMediaType {
+  return VALID_MEDIA_TYPES.has(mime) ? (mime as ImageMediaType) : "image/png";
+}
+
 async function imageToBase64(url: string): Promise<{
   data: string;
-  media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  media_type: ImageMediaType;
 }> {
   if (url.startsWith("data:")) {
     const [header, data] = url.split(",");
-    const media_type = header.split(":")[1].split(";")[0] as any;
+    const media_type = toMediaType(header.split(":")[1].split(";")[0]);
     return { data, media_type };
   }
   const res = await fetch(url);
@@ -27,7 +37,7 @@ async function imageToBase64(url: string): Promise<{
     reader.onloadend = () => {
       const result = reader.result as string;
       const [header, data] = result.split(",");
-      const media_type = header.split(":")[1].split(";")[0] as any;
+      const media_type = toMediaType(header.split(":")[1].split(";")[0]);
       resolve({ data, media_type });
     };
     reader.onerror = reject;
@@ -135,6 +145,27 @@ RULES — follow these exactly:
 8. "kudos" is genuine praise, separate from findings — no citation required. Only include an item for something specifically well-executed or creative (typography, color, layout, copy voice, micro-interaction intent, composition). Region is optional — omit it if the praise isn't tied to one spot. If this design has critical or warning findings that outweigh its strengths, or nothing genuinely stands out, return an empty array. Do not pad this list to hit a quota — 0 is a valid and common answer.`;
 }
 
+type RawRegion = { x?: unknown; y?: unknown; w?: unknown; h?: unknown };
+type RawFinding = {
+  principle?: unknown;
+  source?: unknown;
+  severity?: unknown;
+  confidence?: unknown;
+  observation?: unknown;
+  recommendation?: unknown;
+  region?: RawRegion;
+  rule?: ResearchFinding["rule"];
+};
+type RawPrinciple = {
+  id?: unknown;
+  name?: unknown;
+  category?: unknown;
+  status?: unknown;
+  description?: unknown;
+  impact?: unknown;
+};
+type RawKudos = { title?: unknown; observation?: unknown; region?: RawRegion };
+
 function clamp(v: unknown, min = 0, max = 1): number {
   const n = typeof v === "number" ? v : 0;
   return Math.max(min, Math.min(max, n));
@@ -152,110 +183,112 @@ export async function analyzeWithClaude(
     return generateAnalysis(context.designType, context.audience);
   }
 
-  try {
-    onStage?.("Preparing design for analysis…");
-    const image = await imageToBase64(context.imageUrl!);
+  onStage?.("Preparing design for analysis…");
+  const image = await imageToBase64(context.imageUrl!);
 
-    if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
+  if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
 
-    onStage?.("Analyzing design against UX research…");
-    const response = await fetch("/api/anthropic/v1/messages", {
-      method: "POST",
-      cache: "no-store",
-      headers: {
-        "content-type": "application/json",
-      },
-      signal,
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: image.media_type, data: image.data },
-              },
-              { type: "text", text: buildPrompt(context) },
-            ],
-          },
-        ],
-      }),
-    });
+  onStage?.("Analyzing design against UX research…");
+  const response = await fetch("/api/anthropic/v1/messages", {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json",
+    },
+    signal,
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: image.media_type, data: image.data },
+            },
+            { type: "text", text: buildPrompt(context) },
+          ],
+        },
+      ],
+    }),
+  });
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => response.statusText);
-      throw new Error(`Claude API ${response.status}: ${errText}`);
-    }
-
-    onStage?.("Parsing heuristic findings…");
-    const payload = await response.json();
-    const rawText: string = payload.content?.[0]?.text ?? "";
-
-    // Claude sometimes wraps JSON in markdown fences or adds preamble — extract the object
-    const match = rawText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("No JSON object found in Claude response");
-
-    const parsed = JSON.parse(match[0]);
-
-    const VALID_SEVERITY = new Set(["critical", "warning", "info", "pass"]);
-    const VALID_CONFIDENCE = new Set(["medium", "low"]);
-    const VALID_CATEGORY = new Set(["Gestalt", "Heuristic", "Cognitive Load", "Bias", "Attention"]);
-
-    const findings: ResearchFinding[] = (parsed.findings ?? []).map((f: any, i: number) => ({
-      id: `cv-${Date.now()}-${i}`,
-      principle: String(f.principle ?? `Finding ${i + 1}`),
-      source: String(f.source ?? "Heuristic evaluation"),
-      severity: VALID_SEVERITY.has(f.severity) ? f.severity : "info",
-      // Downgrade "high" to "medium" — Vision cannot do deterministic checks
-      confidence: f.confidence === "high" ? "medium" : (VALID_CONFIDENCE.has(f.confidence) ? f.confidence : "low"),
-      observation: String(f.observation ?? ""),
-      recommendation: String(f.recommendation ?? ""),
-      region: {
-        x: clamp(f.region?.x),
-        y: clamp(f.region?.y),
-        w: clamp(f.region?.w, 0.05),
-        h: clamp(f.region?.h, 0.03),
-      },
-      rule: f.rule ?? undefined,
-    }));
-
-    const principles: CognitivePrinciple[] = (parsed.principles ?? []).map((p: any, i: number) => ({
-      id: String(p.id ?? `p${i + 1}`),
-      name: String(p.name ?? `Principle ${i + 1}`),
-      category: VALID_CATEGORY.has(p.category) ? p.category : "Heuristic",
-      status: VALID_SEVERITY.has(p.status) ? p.status : "info",
-      description: String(p.description ?? ""),
-      impact: String(p.impact ?? ""),
-    }));
-
-    // An empty kudos array is a meaningful result (the design didn't earn any praise),
-    // so unlike findings/principles it never falls back to the mock generator.
-    const kudos: Kudos[] = (parsed.kudos ?? [])
-      .map((k: any, i: number) => ({
-        id: `kv-${Date.now()}-${i}`,
-        title: String(k.title ?? `Highlight ${i + 1}`),
-        observation: String(k.observation ?? ""),
-        region: k.region
-          ? { x: clamp(k.region.x), y: clamp(k.region.y), w: clamp(k.region.w, 0.05), h: clamp(k.region.h, 0.03) }
-          : undefined,
-      }))
-      .filter((k: Kudos) => k.observation.trim().length > 0);
-
-    // Lenses and heatmap stay as context-based mock — they're audience archetypes, not image-derived
-    const mock = generateAnalysis(context.designType, context.audience);
-
-    return {
-      clarityScore: clamp100(parsed.clarityScore),
-      accessibilityScore: clamp100(parsed.accessibilityScore),
-      findings: findings.length > 0 ? findings : mock.findings,
-      principles: principles.length > 0 ? principles : mock.principles,
-      lenses: mock.lenses,
-      heatmap: mock.heatmap,
-      kudos,
-    };
-  } catch (err) {
-    throw err;
+  if (!response.ok) {
+    const errText = await response.text().catch(() => response.statusText);
+    throw new Error(`Claude API ${response.status}: ${errText}`);
   }
+
+  onStage?.("Parsing heuristic findings…");
+  const payload = await response.json();
+  const rawText: string = payload.content?.[0]?.text ?? "";
+
+  // Claude sometimes wraps JSON in markdown fences or adds preamble — extract the object
+  const match = rawText.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON object found in Claude response");
+
+  const parsed: { findings?: RawFinding[]; principles?: RawPrinciple[]; kudos?: RawKudos[]; clarityScore?: unknown; accessibilityScore?: unknown } = JSON.parse(match[0]);
+
+  const VALID_SEVERITY = new Set(["critical", "warning", "info", "pass"]);
+  const VALID_CONFIDENCE = new Set(["medium", "low"]);
+  const VALID_CATEGORY = new Set(["Gestalt", "Heuristic", "Cognitive Load", "Bias", "Attention"]);
+
+  const findings: ResearchFinding[] = (parsed.findings ?? []).map((f, i) => ({
+    id: `cv-${Date.now()}-${i}`,
+    principle: String(f.principle ?? `Finding ${i + 1}`),
+    source: String(f.source ?? "Heuristic evaluation"),
+    severity: (typeof f.severity === "string" && VALID_SEVERITY.has(f.severity) ? f.severity : "info") as Severity,
+    // Downgrade "high" to "medium" — Vision cannot do deterministic checks
+    confidence: (f.confidence === "high"
+      ? "medium"
+      : typeof f.confidence === "string" && VALID_CONFIDENCE.has(f.confidence)
+        ? f.confidence
+        : "low") as Confidence,
+    observation: String(f.observation ?? ""),
+    recommendation: String(f.recommendation ?? ""),
+    region: {
+      x: clamp(f.region?.x),
+      y: clamp(f.region?.y),
+      w: clamp(f.region?.w, 0.05),
+      h: clamp(f.region?.h, 0.03),
+    },
+    rule: f.rule ?? undefined,
+  }));
+
+  const principles: CognitivePrinciple[] = (parsed.principles ?? []).map((p, i) => ({
+    id: String(p.id ?? `p${i + 1}`),
+    name: String(p.name ?? `Principle ${i + 1}`),
+    category: (typeof p.category === "string" && VALID_CATEGORY.has(p.category)
+      ? p.category
+      : "Heuristic") as CognitivePrinciple["category"],
+    status: (typeof p.status === "string" && VALID_SEVERITY.has(p.status) ? p.status : "info") as Severity,
+    description: String(p.description ?? ""),
+    impact: String(p.impact ?? ""),
+  }));
+
+  // An empty kudos array is a meaningful result (the design didn't earn any praise),
+  // so unlike findings/principles it never falls back to the mock generator.
+  const kudos: Kudos[] = (parsed.kudos ?? [])
+    .map((k, i) => ({
+      id: `kv-${Date.now()}-${i}`,
+      title: String(k.title ?? `Highlight ${i + 1}`),
+      observation: String(k.observation ?? ""),
+      region: k.region
+        ? { x: clamp(k.region.x), y: clamp(k.region.y), w: clamp(k.region.w, 0.05), h: clamp(k.region.h, 0.03) }
+        : undefined,
+    }))
+    .filter((k: Kudos) => k.observation.trim().length > 0);
+
+  // Lenses and heatmap stay as context-based mock — they're audience archetypes, not image-derived
+  const mock = generateAnalysis(context.designType, context.audience);
+
+  return {
+    clarityScore: clamp100(parsed.clarityScore),
+    accessibilityScore: clamp100(parsed.accessibilityScore),
+    findings: findings.length > 0 ? findings : mock.findings,
+    principles: principles.length > 0 ? principles : mock.principles,
+    lenses: mock.lenses,
+    heatmap: mock.heatmap,
+    kudos,
+  };
 }

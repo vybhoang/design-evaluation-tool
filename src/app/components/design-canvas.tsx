@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, type ReactNode } from "react";
+import { useRef, useState, useEffect, useCallback, type ReactNode } from "react";
 import { Upload, Sparkles, Loader2, Clock } from "lucide-react";
 import { isLiveAnalysisEnabled, suggestGoalsFromImage } from "./claude-vision-analysis";
 import { toast } from "sonner";
@@ -142,11 +142,14 @@ export function DesignCanvas({
     return () => clearInterval(id);
   }, [isAnalyzing]);
 
-  const handleFile = (file: File) => {
-    const url = URL.createObjectURL(file);
-    if (context.imageUrl) setImageReplaced(true);
-    setContext({ ...context, imageUrl: url });
-  };
+  const handleFile = useCallback(
+    (file: File) => {
+      const url = URL.createObjectURL(file);
+      if (context.imageUrl) setImageReplaced(true);
+      setContext({ ...context, imageUrl: url });
+    },
+    [context, setContext]
+  );
 
   useEffect(() => {
     if (!context.imageUrl || !isLiveAnalysisEnabled()) {
@@ -186,7 +189,7 @@ export function DesignCanvas({
     };
     document.addEventListener("paste", handler);
     return () => document.removeEventListener("paste", handler);
-  }, [context]);
+  }, [context, handleFile]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();

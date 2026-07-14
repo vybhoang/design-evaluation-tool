@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, BookOpen, Brain, Users, Accessibility, Eye, ShieldAlert, Quote } from "lucide-react";
+import { ArrowRight, BookOpen, Brain, Users, Accessibility, Eye, ShieldAlert, Quote, type LucideIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { useStore } from "../store";
@@ -158,7 +158,7 @@ function Step({ n, title, body }: { n: string; title: string; body: string }) {
   );
 }
 
-function Bullet({ icon: Icon, children }: { icon: any; children: React.ReactNode }) {
+function Bullet({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-3">
       <Icon className="size-4 mt-0.5 text-muted-foreground shrink-0" />

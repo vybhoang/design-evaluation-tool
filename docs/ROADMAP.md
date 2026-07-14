@@ -161,7 +161,7 @@ Items from PRD Tier 3. Validate phases 2–3 first before committing.
 |---|---|
 | **Custom team heuristics** | Let teams define their own Deterministic rules (e.g. brand colour checks). Labeled "Team rule", not published research. |
 | **Richer annotation layer** | When a finding is active, pulse the region bbox; allow users to manually draw a region and attach a note |
-| **Mobile-responsive layout** | 🟡 Partially addressed 2026-06-25 — see Beta Readiness Pass below. Chrome (header nav) and the worst non-stacking grids (Compare, Instruments tabs) no longer break under ~640px. Not yet covered: card-sort drag-and-drop has no touch/pointer fallback, and the instrument capture screens in `session.tsx` haven't had a dedicated narrow-viewport pass. |
+| **Mobile-responsive layout** | 🟢 Largely resolved — see Beta Readiness Pass below. Chrome (header nav) and the worst non-stacking grids (Compare, Instruments tabs) no longer break under ~640px. **Corrected 2026-07-14**: this line previously said card-sort had "no touch/pointer fallback" — re-checked against [card-sort-session.tsx](../src/app/components/card-sort-session.tsx) and that was stale; the shipped card sort is click-to-assign (no drag-and-drop was ever built), which already works on touch. `session.tsx`'s layout (`grid-cols-1 lg:grid-cols-[...]`) and `session-capture.tsx`'s control clusters (`flex-wrap` throughout) also already stack/wrap correctly below `lg`/narrow widths on code-level review. Not independently verified on a physical narrow device — flag if real usage surfaces a layout break. |
 | **Keyboard-first moderation** | Session capture is currently mouse-only. Keyboard shortcuts for start/stop/tag would help facilitated sessions. |
 
 ---
@@ -202,7 +202,9 @@ Phase 0  Foundation            ████████████████�
 Phase 1  UX Polish             ████████████████████  ✅ Done
 Phase 2  Signal & Findability  ████████████████████  ✅ Done
 Phase 3  Depth & Trust         ████████████████████  ✅ Done
-Phase 4  Platform              ███░░░░░░░░░░░░░░░░░  💡 Exploratory (mobile partially addressed)
+Phase 4  Platform              ████░░░░░░░░░░░░░░░░  💡 Exploratory (mobile largely resolved)
 ```
 
-**Next action**: Phase 3.1's deferred severity-timeline view, or finish the Phase 4 mobile pass (card-sort touch support, session.tsx narrow-viewport layout) — whichever real beta-tester feedback asks for first. Everything else in Tiers 1–2 is shipped; don't commit further roadmap scope until usage signal comes back.
+**Next action**: Phase 3.1's deferred severity-timeline view, keyboard-first moderation, or the `AudienceLens.testMethod` deep-link — whichever real beta-tester feedback asks for first. The mobile pass is no longer the blocker it was recorded as (see corrected row above). Everything else in Tiers 1–2 is shipped; don't commit further roadmap scope until usage signal comes back.
+
+**2026-07-14 engineering-hygiene pass** (not a roadmap-scope item, but tracked here since it changes what "shippable" verifies): the project had zero `tsconfig.json`, no ESLint, and no test runner — `vite build` (esbuild) stripped types without ever checking them. Added `tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json` (strict), fixed the ~10 resulting type errors (including missing `@types/react`/`@types/react-dom`, which weren't installed at all), added ESLint (flat config, typescript-eslint + react-hooks) and fixed all resulting errors (unsafe `any` at JSON/prop boundaries, a no-op try/catch, a stale unmemoized effect dependency), and added Vitest with unit tests for the pure scoring/hit-testing/codebook helpers. `npm run typecheck` / `lint` / `test` / `build` all now exist and pass clean.

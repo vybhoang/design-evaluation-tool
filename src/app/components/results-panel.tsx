@@ -4,6 +4,7 @@ import {
   ArrowRight, Download, Filter, Accessibility, Eye, ShieldAlert,
   HelpCircle, Beaker, Flag, BookCheck, CircleDashed, MinusCircle,
   FileText, Copy, Check, ChevronDown, Award, Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { DisclosureBanner } from "./disclosure-banner";
@@ -30,7 +31,7 @@ export function triageScore(f: ResearchFinding, validations: ValidationEvidence[
   return sev * conf * bonus;
 }
 
-export const severityMeta: Record<Severity, { icon: any; label: string }> = {
+export const severityMeta: Record<Severity, { icon: LucideIcon; label: string }> = {
   critical: { icon: XCircle, label: "Critical" },
   warning: { icon: AlertTriangle, label: "Warning" },
   info: { icon: Info, label: "Insight" },
@@ -118,7 +119,7 @@ export function EmptyResults({ hasImage = false }: { hasImage?: boolean }) {
   );
 }
 
-function MiniScore({ icon: Icon, label, value, tip }: { icon: any; label: string; value: number; tip?: string }) {
+function MiniScore({ icon: Icon, label, value, tip }: { icon: LucideIcon; label: string; value: number; tip?: string }) {
   const color = value >= 80 ? "text-emerald-600" : value >= 60 ? "text-amber-600" : "text-red-600";
   const bar = value >= 80 ? "bg-emerald-500" : value >= 60 ? "bg-amber-500" : "bg-red-500";
   return (

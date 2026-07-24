@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
+import { Link } from "react-router";
+import { toast } from "sonner";
 import {
   AlertTriangle, CheckCircle2, Info, XCircle, BookOpen, Brain, Users,
   ArrowRight, Download, Filter, Accessibility, Eye, ShieldAlert,
   HelpCircle, Beaker, Flag, BookCheck, CircleDashed, MinusCircle,
-  FileText, Copy, Check, ChevronDown, Award, Sparkles,
+  FileText, Copy, Check, ChevronDown, Award, Sparkles, RotateCw,
   type LucideIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
@@ -23,6 +25,31 @@ import type {
   AnalysisResult, Severity, ResearchFinding, CognitivePrinciple,
   AudienceLens, Confidence, Kudos,
 } from "./analysis-data";
+
+// Shared by every "export as .md" action in this file (test plan, punch
+// list, full report) — triggers a browser download of a text blob without
+// leaving a dangling object URL behind.
+function downloadMarkdown(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Shared "copy to clipboard, flash a checkmark, revert" behavior used by
+// both the test plan and punch list dialogs.
+function useCopyToClipboard(resetMs = 2000): [boolean, (text: string) => void] {
+  const [copied, setCopied] = useState(false);
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), resetMs);
+  };
+  return [copied, copy];
+}
 
 export function triageScore(f: ResearchFinding, validations: ValidationEvidence[]): number {
   const sev  = f.severity   === "critical" ? 4 : f.severity   === "warning" ? 2 : f.severity  === "info" ? 1 : 0;
@@ -308,7 +335,7 @@ function PrincipleRow({ p }: { p: CognitivePrinciple }) {
   );
 }
 
-function LensCard({ l }: { l: AudienceLens }) {
+function LensCard({ l, analysisId }: { l: AudienceLens; analysisId?: string }) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -344,8 +371,19 @@ function LensCard({ l }: { l: AudienceLens }) {
             {l.risksToValidate.map((r, i) => (
               <div key={i} className="rounded-md border bg-muted/30 p-2.5">
                 <div className="text-sm">{r.risk}</div>
-                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
                   <Beaker className="size-3" /> {r.testMethod}
+                  {/* Only "First-click test" maps to a built instrument today — the other
+                      testMethod strings describe external/manual methods with no in-app
+                      tool, so they stay plain text rather than implying a link that goes nowhere. */}
+                  {r.testMethod === "First-click test" && analysisId && (
+                    <Link
+                      to={`/analysis/${analysisId}/instruments?tab=first-click`}
+                      className="text-primary underline underline-offset-2 hover:no-underline"
+                    >
+                      Set up in Instruments →
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
@@ -372,6 +410,16 @@ type Props = {
   label?: string;
   /** Stable 1-based display numbers keyed by finding ID, used to align pin labels with design canvas. */
   findingNumbers?: Record<string, number>;
+  /** Used only to deep-link a lens's "First-click test" risk to the matching Instruments tab. */
+  analysisId?: string;
+  /**
+   * Re-run the currently viewed page against live analysis, replacing its
+   * result in place. Always available in the header (not just when the
+   * result is flagged mock) so a user can force a fresh analysis on any
+   * page, old or new. Omit to hide the button entirely.
+   */
+  onRerun?: () => void;
+  isRerunning?: boolean;
 };
 
 const DT_LABELS: Record<string, string> = {
@@ -450,6 +498,43 @@ function findingTask(f: ResearchFinding, ctx: TestContext) {
   };
 }
 
+// One "### Task N of M" section for a single finding, used by generateTestPlan.
+function buildTaskBlock(f: ResearchFinding, index: number, total: number, ctx: TestContext): string[] {
+  const task = findingTask(f, ctx);
+  const tier = f.confidence === "high" ? "Deterministic" : f.confidence === "medium" ? "Heuristic" : "Speculative";
+  const lines: string[] = [];
+  lines.push(`### Task ${index + 1} of ${total}: ${f.principle}`);
+  lines.push(``);
+  lines.push(`**Research hypothesis**: ${f.observation}`);
+  lines.push(`**Source**: ${f.source} · ${tier} confidence · ${f.severity.charAt(0).toUpperCase() + f.severity.slice(1)}`);
+  lines.push(``);
+  if (f.confidence === "low") {
+    lines.push(`> ⚠️ **Speculative finding** — the AI flagged this as a pattern it cannot verify from the screenshot alone. Treat this task as exploratory: you are checking *whether* a problem exists here, not confirming one that does. Weight participant responses accordingly.`);
+    lines.push(``);
+  }
+  lines.push(`**Scenario** *(set the scene, do not show the design yet)*:`);
+  lines.push(`> ${task.scenario}`);
+  lines.push(``);
+  lines.push(`**Task prompt** *(read aloud, do not paraphrase)*:`);
+  lines.push(`> ${task.prompt}`);
+  lines.push(``);
+  lines.push(`**What to watch for**:`);
+  task.observe.forEach((o) => lines.push(`- ${o}`));
+  lines.push(``);
+  lines.push(`**Note-taking**:`);
+  lines.push(`- [ ] Completed without assistance`);
+  lines.push(`- [ ] Hesitated before acting`);
+  lines.push(`- [ ] Expressed confusion or frustration`);
+  lines.push(`- [ ] Asked a question or requested help`);
+  lines.push(`- **SEQ — Single Ease Question (1 = very difficult, 7 = very easy; Sauro & Dumas, 2009)**: ___`);
+  lines.push(`- **Time on task**: ___`);
+  lines.push(`- **Observer notes**: ___________`);
+  lines.push(``);
+  lines.push(`---`);
+  lines.push(``);
+  return lines;
+}
+
 function generateTestPlan(result: AnalysisResult, ctx: TestContext, label: string): string {
   const eligible = result.findings.filter((f) => f.severity === "critical" || f.severity === "warning");
   const testFindings = eligible.slice(0, 5);
@@ -505,37 +590,7 @@ function generateTestPlan(result: AnalysisResult, ctx: TestContext, label: strin
   lines.push(``);
 
   testFindings.forEach((f, i) => {
-    const task = findingTask(f, ctx);
-    const tier = f.confidence === "high" ? "Deterministic" : f.confidence === "medium" ? "Heuristic" : "Speculative";
-    lines.push(`### Task ${i + 1} of ${testFindings.length}: ${f.principle}`);
-    lines.push(``);
-    lines.push(`**Research hypothesis**: ${f.observation}`);
-    lines.push(`**Source**: ${f.source} · ${tier} confidence · ${f.severity.charAt(0).toUpperCase() + f.severity.slice(1)}`);
-    lines.push(``);
-    if (f.confidence === "low") {
-      lines.push(`> ⚠️ **Speculative finding** — the AI flagged this as a pattern it cannot verify from the screenshot alone. Treat this task as exploratory: you are checking *whether* a problem exists here, not confirming one that does. Weight participant responses accordingly.`);
-      lines.push(``);
-    }
-    lines.push(`**Scenario** *(set the scene, do not show the design yet)*:`);
-    lines.push(`> ${task.scenario}`);
-    lines.push(``);
-    lines.push(`**Task prompt** *(read aloud, do not paraphrase)*:`);
-    lines.push(`> ${task.prompt}`);
-    lines.push(``);
-    lines.push(`**What to watch for**:`);
-    task.observe.forEach((o) => lines.push(`- ${o}`));
-    lines.push(``);
-    lines.push(`**Note-taking**:`);
-    lines.push(`- [ ] Completed without assistance`);
-    lines.push(`- [ ] Hesitated before acting`);
-    lines.push(`- [ ] Expressed confusion or frustration`);
-    lines.push(`- [ ] Asked a question or requested help`);
-    lines.push(`- **SEQ — Single Ease Question (1 = very difficult, 7 = very easy; Sauro & Dumas, 2009)**: ___`);
-    lines.push(`- **Time on task**: ___`);
-    lines.push(`- **Observer notes**: ___________`);
-    lines.push(``);
-    lines.push(`---`);
-    lines.push(``);
+    lines.push(...buildTaskBlock(f, i, testFindings.length, ctx));
   });
 
   lines.push(`## Debrief (10 min)`);
@@ -570,25 +625,13 @@ function generateTestPlan(result: AnalysisResult, ctx: TestContext, label: strin
 
 function TestPlanDialog({ result, context, label }: { result: AnalysisResult; context: TestContext; label: string }) {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopyToClipboard();
   const plan = useMemo(() => generateTestPlan(result, context, label), [result, context, label]);
   const eligibleCount = result.findings.filter((f) => f.severity === "critical" || f.severity === "warning").length;
   const testCount = Math.min(eligibleCount, 5);
 
   const download = () => {
-    const blob = new Blob([plan], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `test-plan-${label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const copy = () => {
-    navigator.clipboard.writeText(plan);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    downloadMarkdown(`test-plan-${label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}.md`, plan);
   };
 
   return (
@@ -613,7 +656,7 @@ function TestPlanDialog({ result, context, label }: { result: AnalysisResult; co
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 shrink-0">
           <button
-            onClick={copy}
+            onClick={() => copy(plan)}
             className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground transition-colors"
           >
             {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
@@ -631,10 +674,220 @@ function TestPlanDialog({ result, context, label }: { result: AnalysisResult; co
   );
 }
 
+type PunchListScope = "all" | "confirmed";
+
+function PunchListDialog({
+  result, validations, label,
+}: { result: AnalysisResult; validations: ValidationEvidence[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, copy] = useCopyToClipboard();
+  const [scope, setScope] = useState<PunchListScope>("all");
+
+  // "All": every actionable finding (anything but a pass) — the default worklist,
+  // useful before real-user testing has happened. "Confirmed": the stricter
+  // subset real users have actually verified. Both share the same triageScore
+  // ordering (severity × confidence, with an unvalidated-bonus that surfaces
+  // untested findings sooner within the "all" scope).
+  const allFindings = useMemo(
+    () =>
+      result.findings
+        .filter((f) => f.severity !== "pass")
+        .map((f) => ({ f, score: triageScore(f, validations) }))
+        .sort((a, b) => b.score - a.score)
+        .map(({ f }) => f),
+    [result, validations]
+  );
+
+  const confirmedFindings = useMemo(
+    () => allFindings.filter((f) => validationStatus(validations, f.id) === "confirmed"),
+    [allFindings, validations]
+  );
+
+  const findings = scope === "confirmed" ? confirmedFindings : allFindings;
+
+  const markdown = useMemo(() => {
+    const lines: string[] = [];
+    lines.push(`# Punch list${label ? ` — ${label}` : ""}`);
+    lines.push(
+      scope === "confirmed"
+        ? `> Findings confirmed by real-user testing, ranked by severity × confidence. Fix in this order.\n`
+        : `> All actionable findings (critical/warning/insight), ranked by severity × confidence. Confirmed-by-users items are marked; the rest are still hypotheses. Fix in this order.\n`
+    );
+    findings.forEach((f, i) => {
+      const status = validationStatus(validations, f.id);
+      lines.push(`## ${i + 1}. ${f.principle} [${f.severity.toUpperCase()}, ${f.confidence} confidence, ${status}]`);
+      lines.push(`- **Source**: ${f.source}`);
+      lines.push(`- **Observation**: ${f.observation}`);
+      lines.push(`- **Fix**: ${f.recommendation}`);
+      const ev = evidenceFor(validations, f.id);
+      if (ev.length > 0) {
+        lines.push(`- **Evidence**:`);
+        ev.forEach((e) => {
+          lines.push(`  - [${e.verdict}] ${e.method}${e.sampleSize ? ` (n=${e.sampleSize})` : ""}: ${e.note}`);
+        });
+      }
+      lines.push(``);
+    });
+    return lines.join("\n");
+  }, [findings, label, scope, validations]);
+
+  const openDialog = () => {
+    if (allFindings.length === 0) {
+      toast.error("No actionable findings yet — every finding here is a pass.");
+      return;
+    }
+    setOpen(true);
+  };
+
+  const download = () => downloadMarkdown("punch-list.md", markdown);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={openDialog}>
+        <Flag className="size-3.5" /> Punch list
+      </Button>
+      <DialogContent className="max-w-4xl w-[92vw] flex flex-col gap-0 p-0 overflow-hidden max-h-[85vh]">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <Flag className="size-4" /> Punch list
+          </DialogTitle>
+          <DialogDescription>
+            {findings.length} finding{findings.length === 1 ? "" : "s"}, ranked by severity × confidence. Fix in this order.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-6 pt-3 shrink-0 flex items-center gap-1.5 text-xs">
+          {([
+            { key: "all" as const, label: `All (${allFindings.length})` },
+            { key: "confirmed" as const, label: `Confirmed only (${confirmedFindings.length})` },
+          ]).map((o) => (
+            <button
+              key={o.key}
+              onClick={() => setScope(o.key)}
+              className={`px-2.5 py-1 rounded-full border transition-all ${
+                scope === o.key
+                  ? "bg-foreground text-background border-transparent"
+                  : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto border-y bg-muted/30 px-6 py-4 mt-3 space-y-3">
+          {findings.map((f, i) => {
+            const status = validationStatus(validations, f.id);
+            const ev = evidenceFor(validations, f.id);
+            return (
+              <div key={f.id} className="rounded-md border bg-card p-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="size-5 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 text-[10px] font-semibold mt-0.5">
+                    {i + 1}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{f.principle}</span>
+                      <SeverityBadge severity={f.severity} />
+                      <ConfidenceBadge confidence={f.confidence} />
+                      {status !== "unvalidated" && <ValidationBadge status={status} />}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{f.observation}</p>
+                    <div className="flex items-start gap-1.5 text-sm">
+                      <ArrowRight className="size-3.5 mt-0.5 text-primary shrink-0" />
+                      <span>{f.recommendation}</span>
+                    </div>
+                    {ev.length > 0 && (
+                      <div className="text-xs text-muted-foreground space-y-0.5 pt-1.5 mt-1.5 border-t border-current/10">
+                        {ev.map((e) => (
+                          <div key={e.id}>
+                            [{e.verdict}] {e.method}{e.sampleSize ? ` (n=${e.sampleSize})` : ""}: {e.note}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {findings.length === 0 && (
+            <div className="text-center text-sm text-muted-foreground py-10">
+              No confirmed findings yet — log real-user evidence with a &ldquo;Confirmed&rdquo; verdict, or switch to &ldquo;All&rdquo;.
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4 shrink-0">
+          <button
+            onClick={() => copy(markdown)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium shadow-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+            {copied ? "Copied" : "Copy as Markdown"}
+          </button>
+          <button
+            onClick={download}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium shadow-xs hover:bg-primary/90 transition-colors"
+          >
+            <Download className="size-3.5" /> Download .md
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Full Markdown export of every finding, principle, and lens — used by the
+// header "Export" button. Standalone (rather than inline in the component)
+// so it matches the same pattern as generateTestPlan/PunchListDialog's
+// markdown builder, and can be unit-tested independent of rendering.
+function generateReportMarkdown(result: AnalysisResult, validations: ValidationEvidence[]): string {
+  const lines: string[] = [];
+  lines.push(`# UX Heuristic Evaluation`);
+  lines.push(`> This report is a first-pass AI heuristic eval. It is not a substitute for testing with real users.\n`);
+  lines.push(`Clarity (heuristic): ${result.clarityScore}/100`);
+  lines.push(`Accessibility (rule-based): ${result.accessibilityScore}/100\n`);
+  if (result.kudos.length > 0) {
+    lines.push(`## Kudos — what's working well`);
+    result.kudos.forEach((k) => {
+      lines.push(`- **${k.title}**: ${k.observation}`);
+    });
+    lines.push(``);
+  }
+  lines.push(`## Findings (${result.findings.length})`);
+  result.findings.forEach((f, i) => {
+    const status = validationStatus(validations, f.id);
+    lines.push(`\n### ${i + 1}. ${f.principle} [${f.severity.toUpperCase()}, ${f.confidence} confidence, ${status}]`);
+    lines.push(`Source: ${f.source}`);
+    lines.push(`Observation: ${f.observation}`);
+    lines.push(`Recommendation: ${f.recommendation}`);
+    const ev = evidenceFor(validations, f.id);
+    if (ev.length > 0) {
+      lines.push(`Real-user evidence:`);
+      ev.forEach((e) => {
+        lines.push(`  - [${e.verdict}] ${e.method}${e.sampleSize ? ` (n=${e.sampleSize})` : ""}: ${e.note}`);
+      });
+    }
+  });
+  lines.push(`\n## Cognitive principles checklist`);
+  result.principles.forEach((p) => {
+    lines.push(`- [${p.status.toUpperCase()}] ${p.name} (${p.category}): ${p.description}`);
+  });
+  lines.push(`\n## Audience lenses (validate with real humans)`);
+  result.lenses.forEach((l) => {
+    lines.push(`\n### ${l.archetype}`);
+    lines.push(`Context: ${l.context}`);
+    lines.push(`Questions to ask:`);
+    l.questionsToAsk.forEach((q) => lines.push(`  - ${q}`));
+    lines.push(`Risks to validate:`);
+    l.risksToValidate.forEach((r) => lines.push(`  - ${r.risk} (${r.testMethod})`));
+  });
+  return lines.join("\n");
+}
+
 export function ResultsPanel({
   result, activeFindingId, onSelectFinding,
   validations, onAddEvidence, onDeleteEvidence,
-  context, label, findingNumbers,
+  context, label, findingNumbers, analysisId,
+  onRerun, isRerunning,
 }: Props) {
   const [severityFilter, setSeverityFilter] = useState<Set<Severity>>(
     new Set(["critical", "warning", "info", "pass"])
@@ -713,53 +966,7 @@ export function ResultsPanel({
   };
 
   const exportReport = () => {
-    const lines: string[] = [];
-    lines.push(`# UX Heuristic Evaluation`);
-    lines.push(`> This report is a first-pass AI heuristic eval. It is not a substitute for testing with real users.\n`);
-    lines.push(`Clarity (heuristic): ${result.clarityScore}/100`);
-    lines.push(`Accessibility (rule-based): ${result.accessibilityScore}/100\n`);
-    if (result.kudos.length > 0) {
-      lines.push(`## Kudos — what's working well`);
-      result.kudos.forEach((k) => {
-        lines.push(`- **${k.title}**: ${k.observation}`);
-      });
-      lines.push(``);
-    }
-    lines.push(`## Findings (${result.findings.length})`);
-    result.findings.forEach((f, i) => {
-      const status = validationStatus(validations, f.id);
-      lines.push(`\n### ${i + 1}. ${f.principle} [${f.severity.toUpperCase()}, ${f.confidence} confidence, ${status}]`);
-      lines.push(`Source: ${f.source}`);
-      lines.push(`Observation: ${f.observation}`);
-      lines.push(`Recommendation: ${f.recommendation}`);
-      const ev = evidenceFor(validations, f.id);
-      if (ev.length > 0) {
-        lines.push(`Real-user evidence:`);
-        ev.forEach((e) => {
-          lines.push(`  - [${e.verdict}] ${e.method}${e.sampleSize ? ` (n=${e.sampleSize})` : ""}: ${e.note}`);
-        });
-      }
-    });
-    lines.push(`\n## Cognitive principles checklist`);
-    result.principles.forEach((p) => {
-      lines.push(`- [${p.status.toUpperCase()}] ${p.name} (${p.category}): ${p.description}`);
-    });
-    lines.push(`\n## Audience lenses (validate with real humans)`);
-    result.lenses.forEach((l) => {
-      lines.push(`\n### ${l.archetype}`);
-      lines.push(`Context: ${l.context}`);
-      lines.push(`Questions to ask:`);
-      l.questionsToAsk.forEach((q) => lines.push(`  - ${q}`));
-      lines.push(`Risks to validate:`);
-      l.risksToValidate.forEach((r) => lines.push(`  - ${r.risk} (${r.testMethod})`));
-    });
-    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "ux-heuristic-eval.md";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadMarkdown("ux-heuristic-eval.md", generateReportMarkdown(result, validations));
   };
 
   return (
@@ -786,6 +993,24 @@ export function ResultsPanel({
             <div className="flex items-center gap-1.5 shrink-0">
               {context && label && (
                 <TestPlanDialog result={result} context={context} label={label} />
+              )}
+              <PunchListDialog result={result} validations={validations} label={label} />
+              {onRerun && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={onRerun}
+                      disabled={isRerunning}
+                    >
+                      <RotateCw className={`size-3.5 ${isRerunning ? "animate-spin" : ""}`} />
+                      {isRerunning ? "Rerunning…" : "Rerun"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Force a fresh analysis of this page, replacing its current result</TooltipContent>
+                </Tooltip>
               )}
               <Button variant="outline" size="sm" className="gap-1.5" onClick={exportReport}>
                 <Download className="size-3.5" /> Export
@@ -894,7 +1119,7 @@ export function ResultsPanel({
 
         <TabsContent value="humans" className="mt-3">
           <div className="space-y-3">
-            {result.lenses.map((l) => <LensCard key={l.id} l={l} />)}
+            {result.lenses.map((l) => <LensCard key={l.id} l={l} analysisId={analysisId} />)}
             <HumanTestingPanel result={result} />
           </div>
         </TabsContent>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   loadHistory,
   saveHistory,
@@ -81,6 +81,15 @@ type StoreShape = {
   addEntry: (e: HistoryEntry) => void;
   deleteEntry: (id: string) => void;
   clearHistory: () => void;
+  /**
+   * Replace just one page's result within an existing entry, in place — used
+   * by the "Rerun analysis" action so a re-run only touches the page it was
+   * run for. entry.pages holds ALL pages (including the first) when the
+   * entry has more than one screenshot, so pageIndex indexes directly into
+   * it with no offset; entry.result mirrors pages[0] and is kept in sync
+   * when pageIndex === 0.
+   */
+  updatePageResult: (entryId: string, pageIndex: number, result: HistoryEntry["result"]) => void;
   addEvidence: (e: Omit<ValidationEvidence, "id" | "createdAt">) => string;
   deleteEvidence: (id: string) => void;
   addResponse: (r: Omit<InterviewResponse, "id" | "createdAt">) => string;
@@ -108,6 +117,30 @@ type StoreShape = {
   addEmpathyMapEntry: (e: DistributiveOmit<EmpathyMapEntry, "id" | "createdAt">) => string;
   deleteEmpathyMapEntry: (id: string) => void;
 };
+
+// Most of the "add" actions below share one shape: generate an id, stamp
+// createdAt, and either prepend (newest-first lists) or append (stable-order
+// lists) to a state array. Pulling that into one helper removes ~8 repeats of
+// the same three lines. Actions with extra behavior (cascading deletes,
+// cross-referencing other state, batching, union-typed items) are left
+// inline rather than forced through this — the shared shape only covers the
+// plain cases.
+function addWithId<T extends { id: string; createdAt: number }>(
+  setItems: Dispatch<SetStateAction<T[]>>,
+  item: Omit<T, "id" | "createdAt">,
+  makeId: () => string,
+  position: "prepend" | "append"
+): string {
+  const id = makeId();
+  const full = { ...item, id, createdAt: Date.now() } as T;
+  setItems((prev) => (position === "prepend" ? [full, ...prev] : [...prev, full]));
+  return id;
+}
+
+// Counterpart for the plain "remove by id" actions.
+function removeById<T extends { id: string }>(setItems: Dispatch<SetStateAction<T[]>>, id: string) {
+  setItems((prev) => prev.filter((item) => item.id !== id));
+}
 
 const Ctx = createContext<StoreShape | null>(null);
 
@@ -172,28 +205,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     empathyMaps,
     empathyMapEntries,
     addEntry: (e) => setHistory((prev) => [e, ...prev]),
-    deleteEntry: (id) => setHistory((prev) => prev.filter((h) => h.id !== id)),
+    deleteEntry: (id) => removeById(setHistory, id),
     clearHistory: () => setHistory([]),
-    addEvidence: (e) => {
-      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      setValidations((prev) => [{ ...e, id, createdAt: Date.now() }, ...prev]);
-      return id;
-    },
-    deleteEvidence: (id) => setValidations((prev) => prev.filter((v) => v.id !== id)),
-    addResponse: (r) => {
-      const id = makeResponseId();
-      setResponses((prev) => [{ ...r, id, createdAt: Date.now() }, ...prev]);
-      return id;
-    },
+    updatePageResult: (entryId, pageIndex, result) =>
+      setHistory((prev) =>
+        prev.map((h) => {
+          if (h.id !== entryId) return h;
+          if (!h.pages?.length) {
+            // Single-page entry — pageIndex is always 0 here.
+            return { ...h, result };
+          }
+          // entry.pages holds ALL pages (including the first) when an entry has
+          // more than one; entry.result just mirrors pages[0] for single-page
+          // code paths, so keep both in sync when pageIndex === 0.
+          return {
+            ...h,
+            ...(pageIndex === 0 && { result }),
+            pages: h.pages.map((p, i) => (i === pageIndex ? { ...p, result } : p)),
+          };
+        })
+      ),
+    addEvidence: (e) =>
+      addWithId(setValidations, e, () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), "prepend"),
+    deleteEvidence: (id) => removeById(setValidations, id),
+    addResponse: (r) => addWithId(setResponses, r, makeResponseId, "prepend"),
     updateResponse: (id, patch) =>
       setResponses((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))),
-    deleteResponse: (id) => setResponses((prev) => prev.filter((r) => r.id !== id)),
+    deleteResponse: (id) => removeById(setResponses, id),
     clearResponses: () => setResponses([]),
-    addCode: (label) => {
-      const id = makeCodeId();
-      setCodebook((prev) => [...prev, { id, label, createdAt: Date.now() }]);
-      return id;
-    },
+    addCode: (label) => addWithId(setCodebook, { label }, makeCodeId, "append"),
     renameCode: (id, label) => setCodebook((prev) => renameCodeIn(prev, id, label)),
     mergeCode: (fromId, intoId) => {
       setCodebook((prev) => mergeCodesIn(prev, fromId));
@@ -234,13 +274,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (r) => !(r.analysisId === analysisId && r.participantId === participantId && r.scale === scale)
         )
       ),
-    addFirstClickTask: (t) => {
-      const id = makeFirstClickId();
-      setFirstClickTasks((prev) => [...prev, { ...t, id, createdAt: Date.now() }]);
-      return id;
-    },
+    addFirstClickTask: (t) => addWithId(setFirstClickTasks, t, makeFirstClickId, "append"),
     deleteFirstClickTask: (id) => {
-      setFirstClickTasks((prev) => prev.filter((t) => t.id !== id));
+      removeById(setFirstClickTasks, id);
       setFirstClickAttempts((prev) => prev.filter((a) => a.taskId !== id));
     },
     addFirstClickAttempt: (a) => {
@@ -251,18 +287,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         { ...a, id: makeFirstClickId(), createdAt: Date.now(), hit },
       ]);
     },
-    addTaskRun: (t) =>
-      setTaskRuns((prev) => [{ ...t, id: makeTaskRunId(), createdAt: Date.now() }, ...prev]),
-    deleteTaskRun: (id) => setTaskRuns((prev) => prev.filter((t) => t.id !== id)),
-    addCardSortDeck: (d) => {
-      const id = makeCardSortId();
-      setCardSortDecks((prev) => [...prev, { ...d, id, createdAt: Date.now() }]);
-      return id;
-    },
+    addTaskRun: (t) => addWithId(setTaskRuns, t, makeTaskRunId, "prepend"),
+    deleteTaskRun: (id) => removeById(setTaskRuns, id),
+    addCardSortDeck: (d) => addWithId(setCardSortDecks, d, makeCardSortId, "append"),
     updateCardSortDeck: (id, patch) =>
       setCardSortDecks((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d))),
     deleteCardSortDeck: (id) => {
-      setCardSortDecks((prev) => prev.filter((d) => d.id !== id));
+      removeById(setCardSortDecks, id);
       setCardSortPlacements((prev) => prev.filter((p) => p.deckId !== id));
     },
     addCardSortPlacements: (placements) => {
@@ -276,7 +307,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return id;
     },
     deleteEmpathyMap: (id) => {
-      setEmpathyMaps((prev) => prev.filter((m) => m.id !== id));
+      removeById(setEmpathyMaps, id);
       setEmpathyMapEntries((prev) => prev.filter((e) => e.mapId !== id));
     },
     addEmpathyMapEntry: (e) => {
@@ -284,8 +315,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setEmpathyMapEntries((prev) => [...prev, { ...e, id, createdAt: Date.now() }]);
       return id;
     },
-    deleteEmpathyMapEntry: (id) =>
-      setEmpathyMapEntries((prev) => prev.filter((e) => e.id !== id)),
+    deleteEmpathyMapEntry: (id) => removeById(setEmpathyMapEntries, id),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

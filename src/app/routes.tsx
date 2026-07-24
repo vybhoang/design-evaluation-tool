@@ -1,15 +1,18 @@
+import type { ComponentType } from "react";
 import { createBrowserRouter } from "react-router";
 import Root from "./layouts/root";
 import Landing from "./pages/landing";
-import Home from "./pages/home";
-import AnalysisPage from "./pages/analysis";
-import SessionPage from "./pages/session";
-import InstrumentsPage from "./pages/instruments";
-import HistoryPage from "./pages/history";
-import PatternsPage from "./pages/patterns";
-import ComparePage from "./pages/compare";
-import ResponsesPage from "./pages/responses";
-import NotFound from "./pages/not-found";
+
+// Route-level code splitting: react-router's `lazy` keeps the current page mounted
+// until the target route's chunk resolves (no blank-screen flash), unlike a bare
+// React.lazy + Suspense fallback would. Root/Landing stay eager — they're the
+// always-visible shell and the most common first paint. `lazy` must return a
+// route-shaped object ({ Component, ... }), so each loader remaps the page's
+// default export rather than returning the raw module namespace.
+async function page(imp: Promise<{ default: ComponentType }>) {
+  const { default: Component } = await imp;
+  return { Component };
+}
 
 export const router = createBrowserRouter([
   {
@@ -17,15 +20,15 @@ export const router = createBrowserRouter([
     Component: Root,
     children: [
       { index: true, Component: Landing },
-      { path: "new", Component: Home },
-      { path: "analysis/:id", Component: AnalysisPage },
-      { path: "analysis/:id/session", Component: SessionPage },
-      { path: "analysis/:id/instruments", Component: InstrumentsPage },
-      { path: "history", Component: HistoryPage },
-      { path: "patterns", Component: PatternsPage },
-      { path: "compare", Component: ComparePage },
-      { path: "responses", Component: ResponsesPage },
-      { path: "*", Component: NotFound },
+      { path: "new", lazy: () => page(import("./pages/home")) },
+      { path: "analysis/:id", lazy: () => page(import("./pages/analysis")) },
+      { path: "analysis/:id/session", lazy: () => page(import("./pages/session")) },
+      { path: "analysis/:id/instruments", lazy: () => page(import("./pages/instruments")) },
+      { path: "history", lazy: () => page(import("./pages/history")) },
+      { path: "patterns", lazy: () => page(import("./pages/patterns")) },
+      { path: "compare", lazy: () => page(import("./pages/compare")) },
+      { path: "responses", lazy: () => page(import("./pages/responses")) },
+      { path: "*", lazy: () => page(import("./pages/not-found")) },
     ],
   },
 ]);

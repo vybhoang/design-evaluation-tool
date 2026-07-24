@@ -1,7 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023"],
+    // "dom" is required even though this config is for Node-side files
+    // (vite.config.ts, vitest.config.ts): vite.config.ts's screenshot
+    // endpoint passes callbacks to Playwright's page.evaluate(), which run
+    // in the browser context and reference window/document. Those callbacks
+    // are just data (strings/closures) as far as Node is concerned, but the
+    // type checker still needs "dom" in scope to check their bodies.
+    "lib": ["ES2023", "dom"],
     "module": "ESNext",
     "skipLibCheck": true,
 

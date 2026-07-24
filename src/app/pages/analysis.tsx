@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Radio, GitCompareArrows, Share2, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { ArrowLeft, Radio, GitCompareArrows, Share2, BarChart3, ChevronLeft, ChevronRight, TriangleAlert, RotateCw } from "lucide-react";
 import { AnnotatedDesign } from "../components/annotated-design";
 import { ResultsPanel, triageScore } from "../components/results-panel";
 import { WorkflowStepper } from "../components/workflow-stepper";
@@ -8,7 +9,8 @@ import { Button } from "../components/ui/button";
 import { useStore } from "../store";
 import { downloadSnapshot } from "../components/snapshot-export";
 import { TourAnchor } from "../components/tour-overlay";
-import type { AnalysisResult } from "../components/analysis-data";
+import { generateAnalysis, type AnalysisResult } from "../components/analysis-data";
+import { analyzeWithClaude, isLiveAnalysisEnabled } from "../components/claude-vision-analysis";
 
 // Fills in any fields that may be missing on entries stored before a schema
 // addition (e.g. kudos, principles). Never mutates; always returns a new object.
@@ -21,16 +23,18 @@ function normalizeResult(r: AnalysisResult | undefined): AnalysisResult {
     lenses: Array.isArray(r?.lenses) ? r!.lenses : [],
     heatmap: Array.isArray(r?.heatmap) ? r!.heatmap : [],
     kudos: Array.isArray(r?.kudos) ? r!.kudos : [],
+    ...(r?.mock && { mock: r.mock }),
   };
 }
 
 export default function AnalysisPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { history, validations, addEvidence, deleteEvidence } = useStore();
+  const { history, validations, addEvidence, deleteEvidence, updatePageResult } = useStore();
   const entry = history.find((h) => h.id === id);
   const [activeFindingId, setActiveFindingId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(0);
+  const [isRerunning, setIsRerunning] = useState(false);
 
   // Reset page and active finding when navigating to a different entry
   useEffect(() => {
@@ -69,6 +73,51 @@ export default function AnalysisPage() {
   const result = normalizeResult(currentPage.result);
   const pageContext = "context" in currentPage && currentPage.context ? currentPage.context : entry.context;
   const safeEntry = { ...entry, result, context: { ...pageContext, imageUrl: currentPage.imageUrl } };
+
+  // Re-run just the currently viewed page against Claude Vision, replacing only
+  // that page's result via updatePageResult — works the same whether this entry
+  // has one screenshot or many, since it always targets clampedPage/currentPage,
+  // never the whole run. Mirrors home.tsx's runPageAnalysis fallback behavior so
+  // a re-run that still can't reach live analysis is tagged mock again rather
+  // than silently looking successful. Available both from the persistent mock
+  // banner and always-on in the results header, regardless of mock status, so
+  // users can force a fresh analysis on any page, old or new.
+  const handleRerun = async () => {
+    if (!currentPage.imageUrl) return;
+    setIsRerunning(true);
+    try {
+      const ctxWithImage = { ...pageContext, imageUrl: currentPage.imageUrl };
+      let next: AnalysisResult;
+      if (isLiveAnalysisEnabled()) {
+        try {
+          next = await analyzeWithClaude(ctxWithImage, (s) => toast(s));
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const reason = msg.includes("401")
+            ? "Invalid Claude API key — check the Anthropic API key configured for this deployment."
+            : `The live analysis request failed (${msg}) — showing sample heuristic data instead.`;
+          toast.error("Rerun failed — falling back to heuristic mock for this page", { duration: 10000 });
+          next = { ...generateAnalysis(ctxWithImage.designType, ctxWithImage.audience), mock: { reason } };
+        }
+      } else {
+        toast.error(
+          "Live analysis is disabled (VITE_ENABLE_LIVE_ANALYSIS is not \"true\") — rerun still produced sample data.",
+          { duration: 10000 }
+        );
+        next = {
+          ...generateAnalysis(ctxWithImage.designType, ctxWithImage.audience),
+          mock: { reason: "Live analysis is disabled in this environment — this is sample heuristic data, not a real analysis of your screenshot." },
+        };
+      }
+      updatePageResult(entry.id, clampedPage, next);
+      if (!next.mock) {
+        toast.success("Rerun complete — this page now reflects a real analysis.");
+        setActiveFindingId(null);
+      }
+    } finally {
+      setIsRerunning(false);
+    }
+  };
 
   return (
     <>
@@ -144,6 +193,31 @@ export default function AnalysisPage() {
         </div>
       )}
 
+      {/* Persistent (not a toast) — this must stay visible on every visit to this
+          page for as long as the underlying data is fake, including when someone
+          navigates back in from History days later, long after any run-time toast
+          has disappeared. */}
+      {result.mock && (
+        <div className="shrink-0 rounded-lg border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 flex items-start gap-2.5">
+          <TriangleAlert className="size-4 text-red-600 dark:text-red-500 mt-0.5 shrink-0" />
+          <div className="text-sm text-red-800 dark:text-red-300 leading-relaxed flex-1">
+            <span className="font-semibold">Sample data, not a real analysis.</span>{" "}
+            {result.mock.reason}
+            {allPages.length > 1 && " Other pages in this run may still be real — check each page individually."}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0 border-red-300 dark:border-red-900 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/50"
+            onClick={handleRerun}
+            disabled={isRerunning}
+          >
+            <RotateCw className={`size-3.5 ${isRerunning ? "animate-spin" : ""}`} />
+            {isRerunning ? "Rerunning…" : "Rerun this page"}
+          </Button>
+        </div>
+      )}
+
       <WorkflowStepper
         hasImage
         hasResult
@@ -175,6 +249,9 @@ export default function AnalysisPage() {
           context={pageContext}
           label={entry.label}
           findingNumbers={findingNumbers}
+          analysisId={entry.id}
+          onRerun={handleRerun}
+          isRerunning={isRerunning}
         />
         </div>
       </div>

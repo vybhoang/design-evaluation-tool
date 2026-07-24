@@ -12,8 +12,11 @@ export type ResearchFinding = {
   // The deterministic rule being checked. When confidence is "high" these are
   // measurable; for "medium"/"low" they're heuristic guidelines, not guesses.
   rule?: { check: string; observed: string; threshold: string; passes: boolean };
-  // normalized 0-1 coordinates of region on the design where this applies
-  region: { x: number; y: number; w: number; h: number };
+  // Normalized 0-1 coordinates of region on the design where this applies.
+  // Optional: broad/holistic principles (e.g. Jakob's Law, Aesthetic-Usability
+  // Effect) often aren't tied to one specific element — omit rather than force
+  // a guessed location that ends up scattered somewhere meaningless.
+  region?: { x: number; y: number; w: number; h: number };
 };
 
 export type HeatPoint = { x: number; y: number; intensity: number };
@@ -59,6 +62,13 @@ export type AnalysisResult = {
   lenses: AudienceLens[];
   heatmap: HeatPoint[];
   kudos: Kudos[];
+  // Set ONLY when this whole result is the offline heuristic mock generator's
+  // canned output substituting for a real Claude Vision call — either live
+  // analysis is disabled, or the API call failed. Findings/principles/kudos
+  // below are generic template content, not derived from the actual
+  // screenshot, and must not be treated as real findings about this design.
+  // Undefined means this is a genuine, image-derived result.
+  mock?: { reason: string };
 };
 
 export function generateAnalysis(designType: string, audience: string): AnalysisResult {

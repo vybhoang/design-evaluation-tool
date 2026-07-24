@@ -26,6 +26,17 @@ const groups: { label: string; shortcuts: { keys: string[]; action: string }[] }
       { keys: ["Ctrl", "E"], action: "Log evidence for active finding" },
     ],
   },
+  {
+    label: "Live session — moderation",
+    shortcuts: [
+      { keys: ["S"], action: "Start / stop the session" },
+      { keys: ["1-9"], action: "Pick a finding to tag the last observation" },
+      { keys: ["C"], action: "Confirm the picked finding" },
+      { keys: ["R"], action: "Refute the picked finding" },
+      { keys: ["I"], action: "Inconclusive for the picked finding" },
+      { keys: ["Esc"], action: "Cancel a pending tag" },
+    ],
+  },
 ];
 
 export function KeyboardShortcutsDialog({ open, onOpenChange }: Props) {

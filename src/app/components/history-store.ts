@@ -9,7 +9,13 @@ export type HistoryEntry = {
   thumbnail: string;
   context: AnalysisContext;
   result: AnalysisResult;
-  /** Additional pages beyond the first. Each page has its own image, analysis context, and result. */
+  /**
+   * ALL pages in this run, including the first, when the run has more than
+   * one screenshot (index 0 == the same page as the top-level `result`
+   * field above, kept for single-page code paths). Undefined for
+   * single-page runs. Each page has its own image, analysis context, and
+   * result — index into this array directly (no offset).
+   */
   pages?: Array<{ imageUrl: string; result: AnalysisResult; context?: AnalysisContext }>;
 };
 
@@ -22,6 +28,11 @@ type RawHistoryPage = { imageUrl?: unknown; result?: unknown; context?: Analysis
 
 function normalizeResult(r: unknown): HistoryEntry["result"] {
   const obj = (r ?? {}) as Record<string, unknown>;
+  const rawMock = obj.mock as { reason?: unknown } | undefined;
+  const mock =
+    rawMock && typeof rawMock === "object" && typeof rawMock.reason === "string"
+      ? { reason: rawMock.reason }
+      : undefined;
   return {
     clarityScore: typeof obj.clarityScore === "number" ? obj.clarityScore : 0,
     accessibilityScore: typeof obj.accessibilityScore === "number" ? obj.accessibilityScore : 0,
@@ -30,6 +41,8 @@ function normalizeResult(r: unknown): HistoryEntry["result"] {
     lenses: Array.isArray(obj.lenses) ? (obj.lenses as HistoryEntry["result"]["lenses"]) : [],
     heatmap: Array.isArray(obj.heatmap) ? (obj.heatmap as HistoryEntry["result"]["heatmap"]) : [],
     kudos: Array.isArray(obj.kudos) ? (obj.kudos as HistoryEntry["result"]["kudos"]) : [],
+    // Undefined (not stored) means real; only carry it forward when present.
+    ...(mock && { mock }),
   };
 }
 

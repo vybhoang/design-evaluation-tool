@@ -32,63 +32,6 @@ export type AnalysisContext = {
   goal: string;
 };
 
-const GOAL_SUGGESTIONS: Record<string, string[]> = {
-  landing: [
-    "Convert visitors into trial signups",
-    "Generate qualified leads via the CTA",
-    "Drive free trial activations",
-    "Build an email waitlist for launch",
-    "Communicate the value proposition in 5 seconds",
-    "Increase demo booking rate",
-    "Reduce bounce rate on first scroll",
-  ],
-  checkout: [
-    "Reduce cart abandonment rate",
-    "Increase purchase completion rate",
-    "Minimise friction at the payment step",
-    "Drive upsell conversions before confirmation",
-    "Build trust at the payment step",
-    "Reduce guest-checkout drop-off",
-    "Increase average order value",
-  ],
-  dashboard: [
-    "Help users understand their data at a glance",
-    "Reduce time to a key insight",
-    "Surface the most actionable metrics first",
-    "Drive daily return visits through habit loops",
-    "Reduce cognitive load from dense data",
-    "Improve discoverability of advanced features",
-    "Speed up time-to-first-insight for new users",
-  ],
-  onboarding: [
-    "Activate new users within their first session",
-    "Drive discovery of the core feature",
-    "Shorten time to first value",
-    "Improve day-1 retention",
-    "Reduce setup abandonment",
-    "Personalize the experience early",
-    "Build early trust through transparency",
-  ],
-  mobile: [
-    "Increase session depth and return rate",
-    "Reduce drop-off at key steps",
-    "Drive the primary in-app action",
-    "Improve task completion rate",
-    "Reduce one-handed usability friction",
-    "Increase notification opt-in rate",
-    "Improve perceived app performance",
-  ],
-  form: [
-    "Maximise form completion rate",
-    "Reduce field-level abandonment",
-    "Improve submission quality",
-    "Drive account creation",
-    "Reduce time-to-complete",
-    "Minimise validation-error frustration",
-    "Build confidence in data privacy",
-  ],
-};
-
 // Live calls round-trip a screenshot through Claude Vision — variable but usually
 // in this range. The mock stage simulation is fixed-length, so its estimate is exact.
 const LIVE_ESTIMATE = "1–1.5 min";
@@ -132,6 +75,9 @@ export function DesignCanvas({
   const [loadingGoals, setLoadingGoals] = useState(false);
   const [imageReplaced, setImageReplaced] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [showUrlCapture, setShowUrlCapture] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [isCapturingUrl, setIsCapturingUrl] = useState(false);
 
   useEffect(() => {
     if (!isAnalyzing) {
@@ -150,6 +96,35 @@ export function DesignCanvas({
     },
     [context, setContext]
   );
+
+  // Dev-only — captures a live URL server-side (via the /api/screenshot
+  // middleware in vite.config.ts) instead of requiring the user to take
+  // their own screenshot first. No production endpoint exists for this yet;
+  // the UI that calls it is gated behind import.meta.env.DEV below.
+  const captureFromUrl = useCallback(async () => {
+    const target = urlInput.trim();
+    if (!target) return;
+    setIsCapturingUrl(true);
+    try {
+      const res = await fetch("/api/screenshot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: target }),
+      });
+      const payload = await res.json().catch(() => ({}) as { dataUrl?: string; error?: string });
+      if (!res.ok || !payload.dataUrl) {
+        throw new Error(payload.error || `Capture failed (${res.status})`);
+      }
+      if (context.imageUrl) setImageReplaced(true);
+      setContext({ ...context, imageUrl: payload.dataUrl });
+      setUrlInput("");
+      setShowUrlCapture(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't capture that URL");
+    } finally {
+      setIsCapturingUrl(false);
+    }
+  }, [urlInput, context, setContext]);
 
   useEffect(() => {
     if (!context.imageUrl || !isLiveAnalysisEnabled()) {
@@ -231,18 +206,57 @@ export function DesignCanvas({
               </p>
             </div>
           </button>
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              loadDemo();
-            }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); loadDemo(); } }}
-            className="absolute bottom-4 left-0 right-0 text-center text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground cursor-pointer"
+          <div
+            className="absolute bottom-4 left-0 right-0 flex flex-col items-center gap-2 px-10"
+            onClick={(e) => e.stopPropagation()}
           >
-            or use a sample
-          </span>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={loadDemo}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") loadDemo(); }}
+                className="underline underline-offset-4 hover:text-foreground cursor-pointer"
+              >
+                or use a sample
+              </span>
+              {import.meta.env.DEV && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setShowUrlCapture((v) => !v)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setShowUrlCapture((v) => !v); }}
+                    className="underline underline-offset-4 hover:text-foreground cursor-pointer"
+                  >
+                    or capture from a URL
+                  </span>
+                </>
+              )}
+            </div>
+            {import.meta.env.DEV && showUrlCapture && (
+              <div className="flex items-center gap-2 w-full max-w-sm">
+                <Input
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") captureFromUrl(); }}
+                  placeholder="https://example.com/page"
+                  className="h-8 text-xs"
+                  disabled={isCapturingUrl}
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  onClick={captureFromUrl}
+                  disabled={isCapturingUrl || !urlInput.trim()}
+                  className="gap-1.5 shrink-0"
+                >
+                  {isCapturingUrl ? <Loader2 className="size-3.5 animate-spin" /> : "Capture"}
+                </Button>
+              </div>
+            )}
+          </div>
           <input
             ref={inputRef}
             type="file"
@@ -290,7 +304,10 @@ export function DesignCanvas({
                 value={context.designType}
                 onChange={(v) => {
                   setImageReplaced(false);
-                  setContext({ ...context, designType: v, goal: "" });
+                  // Never clear the goal when design type changes — a user may
+                  // deliberately want to change the design type while keeping the
+                  // same goal (e.g. testing whether a goal holds across designs).
+                  setContext({ ...context, designType: v });
                 }}
                 groups={[{ options: DESIGN_TYPE_OPTIONS }]}
                 placeholder="Select or type a design type…"
@@ -317,25 +334,10 @@ export function DesignCanvas({
               />
               {context.imageUrl && (
                 <div className="space-y-2">
-                  {(GOAL_SUGGESTIONS[context.designType] ?? []).slice(0, 4).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="text-xs text-muted-foreground w-full">Common goals</span>
-                      {(GOAL_SUGGESTIONS[context.designType] ?? []).slice(0, 4).map((g) => (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => { setImageReplaced(false); setContext({ ...context, goal: g }); }}
-                          className="text-xs px-2 py-1 rounded-full border border-input bg-muted/50 hover:bg-muted transition-colors text-left"
-                        >
-                          {g}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                   {loadingGoals && (
                     <div className="space-y-1.5">
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Sparkles className="size-3 animate-pulse text-primary" /> AI suggestion — edit before use
+                        <Sparkles className="size-3 animate-pulse text-primary" /> Suggested goals — edit before use
                       </span>
                       <div className="flex gap-1.5 flex-wrap">
                         {[60, 45, 75].map((w) => (
@@ -347,7 +349,7 @@ export function DesignCanvas({
                   {!loadingGoals && aiGoals && aiGoals.length > 0 && (
                     <div className="space-y-1.5">
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Sparkles className="size-3 text-primary" /> AI suggestion — edit before use
+                        <Sparkles className="size-3 text-primary" /> Suggested goals — edit before use
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {aiGoals.slice(0, 4).map((g) => (

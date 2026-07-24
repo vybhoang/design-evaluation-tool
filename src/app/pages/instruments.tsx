@@ -1,4 +1,4 @@
-import { Navigate, useNavigate, useParams, Link } from "react-router";
+import { Navigate, useNavigate, useParams, useSearchParams, Link } from "react-router";
 import { ArrowLeft, Gauge, MousePointerClick, ListChecks, LayoutGrid, HeartHandshake } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -9,11 +9,16 @@ import { CardSortView } from "../components/card-sort-view";
 import { EmpathyMapView } from "../components/empathy-map-view";
 import { useStore } from "../store";
 
+const TAB_VALUES = ["scales", "first-click", "task-completion", "card-sort", "empathy-map"] as const;
+
 export default function InstrumentsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { history } = useStore();
   const entry = history.find((h) => h.id === id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab = TAB_VALUES.includes(tabParam as (typeof TAB_VALUES)[number]) ? tabParam! : "scales";
 
   if (!entry && history.length > 0) return <Navigate to="/history" replace />;
   if (!entry) return null;
@@ -34,7 +39,11 @@ export default function InstrumentsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="scales" className="flex flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setSearchParams(v === "scales" ? {} : { tab: v }, { replace: true })}
+        className="flex flex-col"
+      >
         <TabsList className="shrink-0 grid grid-cols-2 sm:grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="scales" className="gap-1.5">
             <Gauge className="size-4" /> Scales

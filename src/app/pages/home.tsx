@@ -30,6 +30,75 @@ function defaultLabel(c: AnalysisContext) {
   return `${t} · ${new Date().toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 }
 
+// Turns a thrown analysis error into the two things a failed page needs: the
+// reason recorded on the mock result (shown later in the mock-data banner)
+// and the toast shown right now. Kept as a pure function so the 401/503/generic
+// branching doesn't have to live inline inside handleAnalyze's per-page loop.
+function classifyAnalysisFailure(msg: string): { reason: string; toastMessage: string } {
+  if (msg.includes("401")) {
+    return {
+      reason: "Invalid Claude API key — check the Anthropic API key configured for this deployment.",
+      toastMessage: "Invalid API key — falling back to heuristic mock for this page",
+    };
+  }
+  if (msg.includes("503")) {
+    return {
+      reason: "Live analysis isn't configured on this deployment.",
+      toastMessage: "Live analysis isn't configured — falling back to heuristic mock",
+    };
+  }
+  return {
+    reason: `The live analysis request failed (${msg}) — showing sample heuristic data instead.`,
+    toastMessage: "Analysis failed — falling back to heuristic mock for this page",
+  };
+}
+
+// The "live analysis disabled" path — simulates the same staged progress
+// messages a real Claude Vision call would emit, then resolves with mock
+// data tagged so it's never mistaken for a genuine analysis once saved to
+// history. Split out of runPageAnalysis purely for readability; setStage is
+// passed in since this is a plain function, not a hook.
+function simulateMockAnalysis(
+  pageCtx: AnalysisContext,
+  pageNum: number,
+  total: number,
+  signal: AbortSignal,
+  setStage: (s: string) => void
+): Promise<AnalysisResult> {
+  if (total > 1) toast(`Analyzing page ${pageNum} of ${total}…`);
+  return new Promise<AnalysisResult>((resolve, reject) => {
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const onAbort = () => {
+      timeouts.forEach(clearTimeout);
+      reject(new DOMException("Analysis cancelled", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    MOCK_STAGES.forEach((s, i) => {
+      timeouts.push(
+        setTimeout(() => {
+          const prefix = total > 1 ? `Page ${pageNum}/${total}: ` : "";
+          setStage(prefix + s);
+          if (total === 1 && i < MOCK_STAGES.length - 1) toast(s);
+          if (i === MOCK_STAGES.length - 1) {
+            signal.removeEventListener("abort", onAbort);
+            // This IS the "live analysis disabled" path (isLiveAnalysisEnabled()
+            // returned false above). The staged messages above look identical to
+            // a real run, so without this tag the result is indistinguishable
+            // from a genuine Claude Vision analysis once it's saved to history.
+            resolve({
+              ...generateAnalysis(pageCtx.designType, pageCtx.audience),
+              mock: {
+                reason:
+                  "Live analysis is disabled in this environment (VITE_ENABLE_LIVE_ANALYSIS is not set to \"true\") — this is sample heuristic data, not a real analysis of your screenshot.",
+              },
+            });
+          }
+        }, i * 600 + 200)
+      );
+    });
+  });
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const { history, addEntry } = useStore();
@@ -100,28 +169,7 @@ export default function Home() {
         signal
       );
     }
-    if (total > 1) toast(`Analyzing page ${pageNum} of ${total}…`);
-    return new Promise<AnalysisResult>((resolve, reject) => {
-      const timeouts: ReturnType<typeof setTimeout>[] = [];
-      const onAbort = () => {
-        timeouts.forEach(clearTimeout);
-        reject(new DOMException("Analysis cancelled", "AbortError"));
-      };
-      signal.addEventListener("abort", onAbort, { once: true });
-      MOCK_STAGES.forEach((s, i) => {
-        timeouts.push(
-          setTimeout(() => {
-            const prefix = total > 1 ? `Page ${pageNum}/${total}: ` : "";
-            setStage(prefix + s);
-            if (total === 1 && i < MOCK_STAGES.length - 1) toast(s);
-            if (i === MOCK_STAGES.length - 1) {
-              signal.removeEventListener("abort", onAbort);
-              resolve(generateAnalysis(pageCtx.designType, pageCtx.audience));
-            }
-          }, i * 600 + 200)
-        );
-      });
-    });
+    return simulateMockAnalysis(pageCtx, pageNum, total, signal, setStage);
   };
 
   const handleAnalyze = async () => {
@@ -135,10 +183,30 @@ export default function Home() {
 
     try {
       const pageResults: Array<{ imageUrl: string; result: AnalysisResult; context: AnalysisContext }> = [];
+      let failedPages = 0;
 
       for (let i = 0; i < allUrls.length; i++) {
         const pageCtx = { ...allContexts[i], imageUrl: allUrls[i] };
-        const result = await runPageAnalysis(pageCtx, i + 1, allUrls.length, controller.signal);
+        const total = allUrls.length;
+
+        // Per-page fallback: one page's transient failure (rate limit, timeout,
+        // a bad response) used to abort the whole run and discard every other
+        // page's already-completed result. Now it only degrades that one page
+        // to the heuristic mock, so a 3-page upload always produces 3 pages of
+        // output — real where possible, mock where a page genuinely failed.
+        let result: AnalysisResult;
+        try {
+          result = await runPageAnalysis(pageCtx, i + 1, total, controller.signal);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") throw err;
+          failedPages++;
+          const msg = err instanceof Error ? err.message : String(err);
+          const prefix = total > 1 ? `Page ${i + 1}/${total}: ` : "";
+          const { reason, toastMessage } = classifyAnalysisFailure(msg);
+          toast.error(`${prefix}${toastMessage}`, { duration: 10000 });
+          result = { ...generateAnalysis(pageCtx.designType, pageCtx.audience), mock: { reason } };
+        }
+
         const fullDataUrl = await imageToThumbnail(allUrls[i], 1400);
         pageResults.push({ imageUrl: fullDataUrl, result, context: pageCtx });
       }
@@ -154,37 +222,30 @@ export default function Home() {
         pages: pageResults.length > 1 ? pageResults : undefined,
       };
       addEntry(entry);
-      toast.success(
-        pageResults.length > 1
-          ? `Analysis complete — ${pageResults.length} pages`
-          : "Analysis complete"
-      );
+      if (failedPages > 0) {
+        // Deliberately toast.warning, not .success — a run where any page fell
+        // back to mock is not a clean success, and a green checkmark toast reads
+        // as "all good" even with the mock count spelled out in the text. This
+        // one also stays up longer so it can't be missed.
+        toast.warning(
+          `Analysis complete, but ${failedPages} of ${pageResults.length} page${pageResults.length > 1 ? "s" : ""} ` +
+            `used sample heuristic data (live analysis failed) — see the banner on the affected page(s) to rerun.`,
+          { duration: 10000 }
+        );
+      } else {
+        toast.success(
+          pageResults.length > 1
+            ? `Analysis complete — ${pageResults.length} pages`
+            : "Analysis complete"
+        );
+      }
       navigate(`/analysis/${entry.id}`);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("401")) {
-        toast.error("Invalid API key — check the ANTHROPIC_API_KEY configured for this deployment");
-      } else if (msg.includes("503")) {
-        toast.error("Live analysis isn't configured on this deployment — falling back to heuristic mock");
-      } else {
-        toast.error("Analysis failed — falling back to heuristic mock");
-        try {
-          const r = generateAnalysis(context.designType, context.audience);
-          const thumb = await imageToThumbnail(context.imageUrl!, 200);
-          const fullDataUrl = await imageToThumbnail(context.imageUrl!, 1400);
-          const fallbackEntry: HistoryEntry = {
-            id: makeId(),
-            createdAt: Date.now(),
-            label: defaultLabel(context),
-            thumbnail: thumb,
-            context: { ...context, imageUrl: fullDataUrl },
-            result: r,
-          };
-          addEntry(fallbackEntry);
-          navigate(`/analysis/${fallbackEntry.id}`);
-        } catch { /* ignore */ }
-      }
+      // Only reachable for failures outside the per-page loop (e.g. the final
+      // thumbnail/addEntry step) — the loop itself no longer throws for a
+      // single page's analysis failure.
+      toast.error("Analysis failed to complete — please try again");
     } finally {
       setIsAnalyzing(false);
       setStage("");

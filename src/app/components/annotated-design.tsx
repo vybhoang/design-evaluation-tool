@@ -192,6 +192,12 @@ export function AnnotatedDesign({
           {viewMode === "annotations" && result && (
             <div className="absolute inset-0">
               {findings.map((f, i) => {
+                // Broad/holistic findings (Jakob's Law, Aesthetic-Usability
+                // Effect, etc.) intentionally have no region — they aren't
+                // tied to one spot on the design, so there's nothing correct
+                // to pin. They still show up in the Heuristics panel list,
+                // just without a canvas marker.
+                if (!f.region) return null;
                 const isActive = activeFindingId === f.id;
                 return (
                   <button

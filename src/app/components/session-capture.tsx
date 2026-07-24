@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Radio, Square, Plus, Tag, Clock, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp, X, Check, Hash, ListChecks } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -363,6 +363,7 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
   const [draft, setDraft] = useState("");
   const [observations, setObservations] = useState<Observation[]>([]);
   const [expanded, setExpanded] = useState(true);
+  const [pendingTagFindingId, setPendingTagFindingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -393,7 +394,7 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
     return () => clearInterval(id);
   }, [recording, startedAt]);
 
-  const start = () => {
+  const start = useCallback(() => {
     setRecording(true);
     setStartedAt(Date.now());
     setElapsed(0);
@@ -401,9 +402,9 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
     setExpanded(true);
     setTimeout(() => inputRef.current?.focus(), 50);
     toast("Session started — type observations + Enter to log");
-  };
+  }, []);
 
-  const stop = () => {
+  const stop = useCallback(() => {
     setRecording(false);
     const untagged = observations.filter((o) => !o.taggedFindingId).length;
     if (untagged > 0) {
@@ -411,7 +412,7 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
     } else {
       toast.success(`Session ended · ${observations.length} observation${observations.length === 1 ? "" : "s"} logged, all tagged`);
     }
-  };
+  }, [observations]);
 
   const logObservation = () => {
     const text = draft.trim();
@@ -439,30 +440,29 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
     setDraft("");
   };
 
-  const tagObservation = (
-    obsId: string,
-    findingId: string,
-    verdict: "confirmed" | "refuted" | "inconclusive"
-  ) => {
-    const obs = observations.find((o) => o.id === obsId);
-    if (!obs) return;
-    if (obs.evidenceId) onDeleteEvidence(obs.evidenceId);
-    const evidenceId = onAddEvidence({
-      findingId,
-      verdict,
-      method: `Live session${participant ? ` · ${participant}` : ""}`,
-      sampleSize: 1,
-      note: obs.text,
-      analysisId,
-      analysisLabel,
-    });
-    setObservations(
-      observations.map((o) => (o.id === obsId ? { ...o, taggedFindingId: findingId, verdict, evidenceId } : o))
-    );
-    const principle = findings.find((f) => f.id === findingId)?.principle;
-    updateResponse(obs.responseId, { taggedFindingId: findingId, findingPrinciple: principle, verdict });
-    toast.success(obs.taggedFindingId ? "Tag updated" : "Tagged & promoted to evidence");
-  };
+  const tagObservation = useCallback(
+    (obsId: string, findingId: string, verdict: "confirmed" | "refuted" | "inconclusive") => {
+      const obs = observations.find((o) => o.id === obsId);
+      if (!obs) return;
+      if (obs.evidenceId) onDeleteEvidence(obs.evidenceId);
+      const evidenceId = onAddEvidence({
+        findingId,
+        verdict,
+        method: `Live session${participant ? ` · ${participant}` : ""}`,
+        sampleSize: 1,
+        note: obs.text,
+        analysisId,
+        analysisLabel,
+      });
+      setObservations(
+        observations.map((o) => (o.id === obsId ? { ...o, taggedFindingId: findingId, verdict, evidenceId } : o))
+      );
+      const principle = findings.find((f) => f.id === findingId)?.principle;
+      updateResponse(obs.responseId, { taggedFindingId: findingId, findingPrinciple: principle, verdict });
+      toast.success(obs.taggedFindingId ? "Tag updated" : "Tagged & promoted to evidence");
+    },
+    [observations, onDeleteEvidence, onAddEvidence, participant, analysisId, analysisLabel, findings, updateResponse]
+  );
 
   const clearTag = (obsId: string) => {
     const obs = observations.find((o) => o.id === obsId);
@@ -480,6 +480,53 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
   const hasStarted = recording || observations.length > 0;
   const untaggedCount = observations.filter((o) => !o.taggedFindingId).length;
   const askedSet = new Set(observations.map((o) => o.question).filter(Boolean));
+
+  // Keyboard-first moderation: lets a facilitator keep eye contact with the participant
+  // instead of reaching for the mouse. S starts/stops the session; once at least one
+  // observation is logged, 1-9 picks a finding (in triage order, capped at 9 — the
+  // Tag popover below remains the mouse-driven path for the 10th+ finding) for the most
+  // recent observation, then C/R/I commits confirmed/refuted/inconclusive.
+  useEffect(() => {
+    if (!expanded) return;
+    const handler = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable
+      ) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "Escape") {
+        if (pendingTagFindingId) setPendingTagFindingId(null);
+        return;
+      }
+      if (e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (recording) stop();
+        else start();
+        return;
+      }
+      if (!observations.length) return;
+      const digit = Number(e.key);
+      if (digit >= 1 && digit <= 9) {
+        const finding = findings[digit - 1];
+        if (finding) setPendingTagFindingId(finding.id);
+        return;
+      }
+      if (!pendingTagFindingId) return;
+      const verdict =
+        e.key.toLowerCase() === "c" ? "confirmed" :
+        e.key.toLowerCase() === "r" ? "refuted" :
+        e.key.toLowerCase() === "i" ? "inconclusive" : null;
+      if (verdict) {
+        e.preventDefault();
+        tagObservation(observations[0].id, pendingTagFindingId, verdict);
+        setPendingTagFindingId(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [expanded, recording, observations, findings, pendingTagFindingId, start, stop, tagObservation]);
 
   return (
     <div ref={rootRef}>
@@ -530,11 +577,11 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
             {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
           </Button>
           {recording ? (
-            <Button size="sm" variant="outline" onClick={stop} className="gap-1.5">
+            <Button size="sm" variant="outline" onClick={stop} className="gap-1.5" title="Shortcut: S">
               <Square className="size-3.5" /> Stop
             </Button>
           ) : (
-            <Button size="sm" onClick={start} className="gap-1.5">
+            <Button size="sm" onClick={start} className="gap-1.5" title="Shortcut: S">
               <Radio className="size-3.5" /> {hasStarted ? "Resume" : "Start session"}
             </Button>
           )}
@@ -603,7 +650,12 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
               ref={inputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && logObservation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") logObservation();
+                // Escape blurs so 1-9/C/R/I tagging shortcuts (which ignore focused
+                // text fields, so typing is never hijacked) become reachable at once.
+                else if (e.key === "Escape") e.currentTarget.blur();
+              }}
               placeholder="Participant's response or observation…"
               className="flex-1"
               disabled={!recording}
@@ -612,6 +664,43 @@ export const SessionCapture = forwardRef<SessionCaptureHandle, Props>(function S
               <Plus className="size-3.5" /> Log
             </Button>
           </div>
+
+          {observations.length > 0 && findings.length > 0 && (
+            <div className="px-3 pb-2 space-y-1.5">
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wide mr-1">
+                  Tag last obs.
+                </span>
+                {findings.slice(0, 9).map((f, i) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setPendingTagFindingId(f.id)}
+                    title={f.principle}
+                    className={`text-xs pl-1 pr-2 py-0.5 rounded-full border transition-colors flex items-center gap-1 max-w-[10rem] ${
+                      pendingTagFindingId === f.id
+                        ? "bg-primary/10 text-primary border-primary/40"
+                        : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                    }`}
+                  >
+                    <kbd className="text-[10px] font-mono">{i + 1}</kbd>
+                    <span className="truncate">{f.principle}</span>
+                  </button>
+                ))}
+              </div>
+              {pendingTagFindingId && (
+                <div className="text-xs flex items-center gap-2 flex-wrap text-muted-foreground">
+                  <span>
+                    Tagging <span className="text-foreground font-medium">{findings.find((f) => f.id === pendingTagFindingId)?.principle}</span> —
+                  </span>
+                  <kbd className="text-[10px] font-mono px-1 rounded border border-border bg-muted">C</kbd> confirm
+                  <kbd className="text-[10px] font-mono px-1 rounded border border-border bg-muted">R</kbd> refute
+                  <kbd className="text-[10px] font-mono px-1 rounded border border-border bg-muted">I</kbd> inconclusive
+                  <kbd className="text-[10px] font-mono px-1 rounded border border-border bg-muted">Esc</kbd> cancel
+                </div>
+              )}
+            </div>
+          )}
 
           {recording && startedAt !== null && (
             <div className="px-3 pb-2">
